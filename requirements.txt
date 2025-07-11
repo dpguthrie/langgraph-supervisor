@@ -1,0 +1,9 @@
+langgraph
+langgraph-supervisor
+langchain-tavily
+langchain[openai]
+python-dotenv
+braintrust
+braintrust_langchain
+rich
+autoevals

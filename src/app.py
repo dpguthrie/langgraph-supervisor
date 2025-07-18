@@ -58,6 +58,11 @@ def add(a: float, b: float):
     return a + b
 
 
+def subtract(a: float, b: float):
+    """Subtract two numbers."""
+    return a - b
+
+
 def multiply(a: float, b: float):
     """Multiply two numbers."""
     return a * b
@@ -70,7 +75,7 @@ def divide(a: float, b: float):
 
 math_agent = create_react_agent(
     model="openai:gpt-4.1",
-    tools=[add, multiply, divide],
+    tools=[add, subtract, multiply, divide],
     prompt=(
         "You are a math agent.\n\n"
         "INSTRUCTIONS:\n"
@@ -121,7 +126,7 @@ if __name__ == "__main__":
             if not user_input.strip():
                 continue
 
-            history.append(HumanMessage(content=user_input))
+            history = [HumanMessage(content=user_input)]
 
             # Show processing indicator
             with console.status("[bold blue]Processing...", spinner="dots"):

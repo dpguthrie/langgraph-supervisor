@@ -1,5 +1,5 @@
 """
-Simple evaluation script for the LangGraph supervisor system.
+Simple evaluation script for the Agent Assistant.
 Run this file to execute basic evaluations.
 """
 
@@ -13,9 +13,8 @@ src_dir = project_root / "src"
 sys.path.insert(0, str(src_dir))
 
 from autoevals import LLMClassifier  # noqa: E402
-from braintrust import Eval  # noqa: E402
+from braintrust import Eval, init_dataset  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
-from langchain_core.messages import HumanMessage  # noqa: E402
 
 # Import our supervisor system
 from src.app import supervisor  # noqa: E402
@@ -37,11 +36,11 @@ def run_supervisor_task(input_data: dict, hooks: Any) -> str:
         if not user_content:
             return "Error: No content in first message"
 
-        history = [HumanMessage(content=user_content)]
+        history = [{"role": "user", "content": user_content}]
 
         # Collect all events and extract routing info
         all_messages = []
-        agent_used = "unknown"
+        agent_used = []
         tool_calls = []
 
         for event in supervisor.stream({"messages": history}):
@@ -64,9 +63,9 @@ def run_supervisor_task(input_data: dict, hooks: Any) -> str:
 
                                 # Determine which agent was used
                                 if "research_agent" in node_name:
-                                    agent_used = "research_agent"
+                                    agent_used.append("research_agent")
                                 elif "math_agent" in node_name:
-                                    agent_used = "math_agent"
+                                    agent_used.append("math_agent")
 
         # Add metadata for evaluation
         if hasattr(hooks, "metadata"):
@@ -164,128 +163,7 @@ response_quality_scorer = LLMClassifier(
 # Basic evaluation
 Eval(
     "langgraph-supervisor",
-    data=[
-        {
-            "input": {
-                "messages": [
-                    {
-                        "content": "What is 15 + 27?",
-                        "type": "human",
-                        "additional_kwargs": {},
-                        "example": False,
-                        "id": None,
-                        "name": None,
-                        "response_metadata": {},
-                    }
-                ]
-            }
-        },
-        {
-            "input": {
-                "messages": [
-                    {
-                        "content": "Calculate 8 * 6",
-                        "type": "human",
-                        "additional_kwargs": {},
-                        "example": False,
-                        "id": None,
-                        "name": None,
-                        "response_metadata": {},
-                    }
-                ]
-            }
-        },
-        {
-            "input": {
-                "messages": [
-                    {
-                        "content": "Divide 100 by 5",
-                        "type": "human",
-                        "additional_kwargs": {},
-                        "example": False,
-                        "id": None,
-                        "name": None,
-                        "response_metadata": {},
-                    }
-                ]
-            }
-        },
-        {
-            "input": {
-                "messages": [
-                    {
-                        "content": "Who is the mayor of Denver?",
-                        "type": "human",
-                        "additional_kwargs": {},
-                        "example": False,
-                        "id": None,
-                        "name": None,
-                        "response_metadata": {},
-                    }
-                ]
-            }
-        },
-        {
-            "input": {
-                "messages": [
-                    {
-                        "content": "What is the capital of Japan?",
-                        "type": "human",
-                        "additional_kwargs": {},
-                        "example": False,
-                        "id": None,
-                        "name": None,
-                        "response_metadata": {},
-                    }
-                ]
-            }
-        },
-        {
-            "input": {
-                "messages": [
-                    {
-                        "content": "What year was Python created?",
-                        "type": "human",
-                        "additional_kwargs": {},
-                        "example": False,
-                        "id": None,
-                        "name": None,
-                        "response_metadata": {},
-                    }
-                ]
-            }
-        },
-        {
-            "input": {
-                "messages": [
-                    {
-                        "content": "Multiply 12 by 7",
-                        "type": "human",
-                        "additional_kwargs": {},
-                        "example": False,
-                        "id": None,
-                        "name": None,
-                        "response_metadata": {},
-                    }
-                ]
-            }
-        },
-        {
-            "input": {
-                "messages": [
-                    {
-                        "content": "Who wrote the novel 1984?",
-                        "type": "human",
-                        "additional_kwargs": {},
-                        "example": False,
-                        "id": None,
-                        "name": None,
-                        "response_metadata": {},
-                    }
-                ]
-            }
-        },
-    ],
+    data=init_dataset("langgraph-supervisor", "Supervisor Agent Dataset"),
     task=run_supervisor_task,
     scores=[response_quality_scorer, routing_accuracy_scorer],  # type: ignore
 )

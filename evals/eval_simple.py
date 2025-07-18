@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import braintrust
+
 # Add the src directory to Python path to resolve imports
 project_root = Path(__file__).parent.parent
 src_dir = project_root / "src"
@@ -166,4 +168,25 @@ Eval(
     data=init_dataset("langgraph-supervisor", "Supervisor Agent Dataset"),
     task=run_supervisor_task,
     scores=[response_quality_scorer, routing_accuracy_scorer],  # type: ignore
+)
+
+
+project = braintrust.projects.create(name="langgraph-supervisor")
+
+project.scorers.create(
+    name="Response Quality",
+    slug="response-quality",
+    messages=[{"role": "system", "content": response_quality_prompt}],
+    choice_scores={"EXCELLENT": 1.0, "GOOD": 0.75, "FAIR": 0.5, "POOR": 0.0},
+    use_cot=True,
+    model="gpt-4o",
+)
+
+project.scorers.create(
+    name="Routing Accuracy",
+    slug="routing-accuracy",
+    messages=[{"role": "system", "content": routing_accuracy_prompt}],
+    choice_scores={"CORRECT": 1, "INCORRECT": 0},
+    use_cot=True,
+    model="gpt-4o",
 )

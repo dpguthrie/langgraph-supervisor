@@ -1,7 +1,7 @@
 import getpass
 import os
 
-from braintrust import init_logger
+from braintrust import Attachment, init_logger
 from braintrust_langchain import BraintrustCallbackHandler, set_global_handler
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
@@ -19,8 +19,72 @@ from helpers import pretty_print_messages
 load_dotenv()
 
 
-handler = BraintrustCallbackHandler()
-set_global_handler(handler)
+class GraphAwareBraintrustCallbackHandler(BraintrustCallbackHandler):
+    """Braintrust callback handler that includes graph metadata in root spans."""
+
+    def __init__(self, graph_metadata=None, **kwargs):
+        super().__init__(**kwargs)
+        self.graph_metadata = graph_metadata or {}
+
+    def _start_span(
+        self,
+        parent_run_id,
+        run_id,
+        name=None,
+        type=None,
+        span_attributes=None,
+        start_time=None,
+        set_current=None,
+        parent=None,
+        event=None,
+    ):
+        # If this is a root span (no parent_run_id), include graph metadata
+        if not parent_run_id and self.graph_metadata:
+            if event is None:
+                event = {}
+
+            # Add graph metadata to the event
+            if "metadata" not in event:
+                event["metadata"] = {}
+
+            # Update metadata with graph information
+            event_metadata = event["metadata"]
+            if isinstance(event_metadata, dict):
+                event_metadata.update(self.graph_metadata)
+
+        return super()._start_span(
+            parent_run_id,
+            run_id,
+            name=name,
+            type=type,
+            span_attributes=span_attributes,
+            start_time=start_time,
+            set_current=set_current,
+            parent=parent,
+            event=event,  # type: ignore
+        )
+
+
+def generate_graph_metadata(graph):
+    """Generate graph visualization and metadata for Braintrust traces."""
+    try:
+        # Generate PNG image
+        png_data = graph.get_graph().draw_mermaid_png()
+
+        attachment = Attachment(
+            data=png_data,
+            filename="mermaid_diagram.png",
+            content_type="image/png",
+        )
+
+        return {"graph_attachment": attachment}
+
+    except Exception as e:
+        print(f"Warning: Could not generate graph visualization: {e}")
+        return {
+            "graph_structure": "supervisor_with_research_and_math_agents",
+            "graph_error": str(e),
+        }
 
 
 def _set_if_undefined(var: str):
@@ -100,6 +164,12 @@ supervisor = create_supervisor(
     output_mode="full_history",
 ).compile()
 
+# Generate graph metadata at startup
+graph_metadata = generate_graph_metadata(supervisor)
+
+# Create custom handler with graph metadata
+handler = GraphAwareBraintrustCallbackHandler(graph_metadata=graph_metadata)
+set_global_handler(handler)
 
 if __name__ == "__main__":
     console = Console()

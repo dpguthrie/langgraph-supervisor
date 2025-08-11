@@ -14,6 +14,8 @@ jobs:
         with:
           python-version: "3.13"
           enable-cache: true
+      - name: Ensure Python available for uv
+        run: uv python install
       - name: Install dependencies with uv
         env:
           UV_SYSTEM_PYTHON: 1

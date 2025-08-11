@@ -1,212 +1,87 @@
-import getpass
+import hmac
 import os
 
-from braintrust import Attachment, init_logger
-from braintrust_langchain import BraintrustCallbackHandler, set_global_handler
-from dotenv import load_dotenv
-from langchain.chat_models import init_chat_model
-from langchain_core.messages import HumanMessage
-from langchain_tavily import TavilySearch
-from langgraph.prebuilt import create_react_agent
-from langgraph_supervisor import create_supervisor
-from rich.console import Console
-from rich.panel import Panel
-from rich.prompt import Prompt
-from rich.text import Text
+import modal  # type: ignore
+from fastapi import Depends, HTTPException, Request, status  # type: ignore
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer  # type: ignore
+from langchain_core.messages import BaseMessage, HumanMessage
 
-from helpers import pretty_print_messages
+from src.agent_graph import get_supervisor
 
-load_dotenv()
+# Build or fetch the cached supervisor graph
+supervisor = get_supervisor()
+
+auth_scheme = HTTPBearer()
 
 
-class GraphAwareBraintrustCallbackHandler(BraintrustCallbackHandler):
-    """Braintrust callback handler that includes graph metadata in root spans."""
+modal_image = (
+    modal.Image.debian_slim()
+    .uv_pip_install(requirements=["requirements.txt"])
+    .add_local_python_source("src")
+)
+app = modal.App("langgraph-supervisor-web", image=modal_image)
 
-    def __init__(self, graph_metadata=None, **kwargs):
-        super().__init__(**kwargs)
-        self.graph_metadata = graph_metadata or {}
+# Always read secrets from local .env and send them as a Secret
+_secrets = [modal.Secret.from_dotenv()]
 
-    def _start_span(
-        self,
-        parent_run_id,
-        run_id,
-        name=None,
-        type=None,
-        span_attributes=None,
-        start_time=None,
-        set_current=None,
-        parent=None,
-        event=None,
-    ):
-        # If this is a root span (no parent_run_id), include graph metadata
-        if not parent_run_id and self.graph_metadata:
-            if event is None:
-                event = {}
 
-            # Add graph metadata to the event
-            if "metadata" not in event:
-                event["metadata"] = {}
+def _normalize_content(content):
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, dict):
+                parts.append(str(part.get("text", "")))
+            else:
+                parts.append(str(part))
+        return " ".join(p for p in parts if p)
+    return content
 
-            # Update metadata with graph information
-            event_metadata = event["metadata"]
-            if isinstance(event_metadata, dict):
-                event_metadata.update(self.graph_metadata)
 
-        return super()._start_span(
-            parent_run_id,
-            run_id,
-            name=name,
-            type=type,
-            span_attributes=span_attributes,
-            start_time=start_time,
-            set_current=set_current,
-            parent=parent,
-            event=event,  # type: ignore
+def _serialize_message(message: BaseMessage):
+    role = getattr(message, "type", message.__class__.__name__.lower())
+    return {"role": role, "content": _normalize_content(message.content)}
+
+
+@app.function(secrets=_secrets)
+@modal.fastapi_endpoint(method="POST")
+async def chat(
+    request: Request,
+    payload: dict,
+    token: HTTPAuthorizationCredentials = Depends(auth_scheme),
+):
+    """HTTP endpoint: {"message": "..."} -> run supervisor and return messages.
+
+    Returns a JSON-serializable transcript of messages.
+    """
+    # Simple Bearer token using constant-time comparison
+    expected_token = os.environ.get("ENDPOINT_AUTH_TOKEN")
+    if not expected_token:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server not configured",
+        )
+    if not token or not hmac.compare_digest(token.credentials, expected_token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
+    user_text = (payload or {}).get("q")
+    if not user_text or not str(user_text).strip():
+        return {"error": "Missing 'q' in request body"}
 
-def generate_graph_metadata(graph):
-    """Generate graph visualization and metadata for Braintrust traces."""
     try:
-        # Generate PNG image
-        png_data = graph.get_graph().draw_mermaid_png()
-
-        attachment = Attachment(
-            data=png_data,
-            filename="mermaid_diagram.png",
-            content_type="image/png",
+        result = await supervisor.ainvoke(
+            {"messages": [HumanMessage(content=str(user_text))]}
         )
-
-        return {"graph_attachment": attachment}
-
+        messages = result.get("messages", []) if isinstance(result, dict) else []
+        serialized = [
+            _serialize_message(m) for m in messages if isinstance(m, BaseMessage)
+        ]
+        # Fallback: if nothing serialized, return string form
+        if not serialized and isinstance(result, dict):
+            return {"result": {k: str(v) for k, v in result.items()}}
+        return {"messages": serialized}
     except Exception as e:
-        print(f"Warning: Could not generate graph visualization: {e}")
-        return {
-            "graph_structure": "supervisor_with_research_and_math_agents",
-            "graph_error": str(e),
-        }
-
-
-def _set_if_undefined(var: str):
-    if not os.environ.get(var):
-        os.environ[var] = getpass.getpass(f"Please provide your {var}")
-
-
-_set_if_undefined("OPENAI_API_KEY")
-_set_if_undefined("TAVILY_API_KEY")
-_set_if_undefined("BRAINTRUST_API_KEY")
-
-init_logger(
-    project="langgraph-supervisor", api_key=os.environ.get("BRAINTRUST_API_KEY")
-)
-
-
-web_search = TavilySearch(max_results=3)
-
-research_agent = create_react_agent(
-    model="openai:gpt-4.1",
-    tools=[web_search],
-    prompt=(
-        "You are a research agent.\n\n"
-        "INSTRUCTIONS:\n"
-        "- Assist ONLY with research-related tasks, DO NOT do any math\n"
-        "- After you're done with your tasks, respond to the supervisor directly\n"
-        "- Respond ONLY with the results of your work, do NOT include ANY other text."
-    ),
-    name="research_agent",
-)
-
-
-def add(a: float, b: float):
-    """Add two numbers."""
-    return a + b
-
-
-def subtract(a: float, b: float):
-    """Subtract two numbers."""
-    return a - b
-
-
-def multiply(a: float, b: float):
-    """Multiply two numbers."""
-    return a * b
-
-
-def divide(a: float, b: float):
-    """Divide two numbers."""
-    return a / b
-
-
-math_agent = create_react_agent(
-    model="openai:gpt-4.1",
-    tools=[add, subtract, multiply, divide],
-    prompt=(
-        "You are a math agent.\n\n"
-        "INSTRUCTIONS:\n"
-        "- Assist ONLY with math-related tasks\n"
-        "- After you're done with your tasks, respond to the supervisor directly\n"
-        "- Respond ONLY with the results of your work, do NOT include ANY other text."
-    ),
-    name="math_agent",
-)
-
-supervisor = create_supervisor(
-    model=init_chat_model("openai:gpt-4.1"),
-    agents=[research_agent, math_agent],
-    prompt=(
-        "You are a supervisor managing two agents:\n"
-        "- a research agent. Assign research-related tasks to this agent\n"
-        "- a math agent. Assign math-related tasks to this agent\n"
-        "Assign work to one agent at a time, do not call agents in parallel.\n"
-        "Do not do any work yourself."
-    ),
-    add_handoff_back_messages=True,
-    output_mode="full_history",
-).compile()
-
-# Generate graph metadata at startup
-graph_metadata = generate_graph_metadata(supervisor)
-
-# Create custom handler with graph metadata
-handler = GraphAwareBraintrustCallbackHandler(graph_metadata=graph_metadata)
-set_global_handler(handler)
-
-if __name__ == "__main__":
-    console = Console()
-
-    # Welcome message
-    welcome_text = Text("🤖 LangGraph Supervisor Chat", style="bold cyan")
-    welcome_panel = Panel(
-        welcome_text, subtitle="Type 'quit' or 'q' to exit", border_style="cyan"
-    )
-    console.print(welcome_panel)
-    console.print()
-
-    history = []
-
-    while True:
-        try:
-            # Get user input with Rich prompt
-            user_input = Prompt.ask("[bold green]You[/bold green]", console=console)
-
-            if user_input.lower() in {"q", "quit", "exit"}:
-                console.print("\n[bold yellow]👋 Goodbye![/bold yellow]")
-                break
-
-            if not user_input.strip():
-                continue
-
-            history = [HumanMessage(content=user_input)]
-
-            # Show processing indicator
-            with console.status("[bold blue]Processing...", spinner="dots"):
-                pass  # Status will auto-stop when exiting context
-
-            for event in supervisor.stream({"messages": history}):
-                pretty_print_messages(event)
-
-        except KeyboardInterrupt:
-            console.print("\n[bold yellow]👋 Goodbye![/bold yellow]")
-            break
-        except Exception as e:
-            console.print(f"[bold red]Error: {e}[/bold red]")
+        return {"error": str(e)}

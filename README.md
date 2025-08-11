@@ -11,6 +11,55 @@ This project implements a **supervisor pattern** using LangGraph to manage two s
 
 The supervisor intelligently routes user queries to the appropriate agent based on the content and context of the request.
 
+## 🏗️ Architecture Diagram
+
+```mermaid
+graph TB
+    User["👤 User"] 
+    Supervisor["🎯 Supervisor Agent<br/>(gpt-4.1)"]
+    
+    subgraph "Specialized Agents"
+        MathAgent["🧮 Math Agent<br/>(gpt-4.1)"]
+        ResearchAgent["🔍 Research Agent<br/>(gpt-4.1)"]
+    end
+    
+    subgraph "Math Tools"
+        Add["➕ add(a, b)"]
+        Subtract["➖ subtract(a, b)"] 
+        Multiply["✖️ multiply(a, b)"]
+        Divide["➗ divide(a, b)"]
+    end
+    
+    subgraph "Research Tools"
+        WebSearch["🌐 TavilySearch<br/>(max_results=3)"]
+    end
+    
+    User -->|"Query"| Supervisor
+    Supervisor -->|"Route Math Tasks"| MathAgent
+    Supervisor -->|"Route Research Tasks"| ResearchAgent
+    
+    MathAgent --> Add
+    MathAgent --> Subtract  
+    MathAgent --> Multiply
+    MathAgent --> Divide
+    
+    ResearchAgent --> WebSearch
+    
+    MathAgent -->|"Results"| Supervisor
+    ResearchAgent -->|"Results"| Supervisor
+    Supervisor -->|"Response"| User
+    
+    classDef userClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef supervisorClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef agentClass fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef toolClass fill:#fff3e0,stroke:#e65100,stroke-width:1px
+    
+    class User userClass
+    class Supervisor supervisorClass
+    class MathAgent,ResearchAgent agentClass
+    class Add,Subtract,Multiply,Divide,WebSearch toolClass
+```
+
 ## ✨ Features
 
 - **Intelligent Routing**: Automatic task delegation to specialized agents
@@ -50,10 +99,7 @@ Using uv (recommended):
 uv pip install -r requirements.txt
 ```
 
-Or using pip:
-```bash
-pip install -r requirements.txt
-```
+CI note: our scheduled workflow uses uv in GitHub Actions for Python setup and dependency install. See `.github/workflows/run_on_schedule.yml` and uv's GitHub guide [Using uv in GitHub Actions](https://docs.astral.sh/uv/guides/integration/github/#setting-up-python).
 
 ### 3. Environment Setup
 
@@ -63,12 +109,37 @@ Create a `.env` file in the project root:
 OPENAI_API_KEY=your_openai_api_key_here
 TAVILY_API_KEY=your_tavily_api_key_here
 BRAINTRUST_API_KEY=your_braintrust_api_key_here
+ENDPOINT_AUTH_TOKEN=your_long_random_token
 ```
 
-### 4. Run the Application
+### 4. Run the Application (choose one)
+
+- Local CLI runner:
 
 ```bash
-python src/app.py
+python -m src.local_runner
+```
+
+- Modal web endpoint (development):
+
+```bash
+modal serve src/app.py
+```
+
+Then call it with (Authorization header required; send the question in `q`):
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $ENDPOINT_AUTH_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"q": "What is 2 + 2?"}' \
+  $(modal url)
+```
+
+- Modal deploy (persistent):
+
+```bash
+modal deploy src/app.py
 ```
 
 ## 💬 Usage Examples
@@ -126,7 +197,9 @@ Evaluation results are automatically uploaded to your Braintrust dashboard where
 ```
 langgraph-supervisor/
 ├── src/                          # Main application code
-│   ├── app.py                   # Supervisor system and main entry point
+│   ├── app.py                   # Modal web endpoint (exposes `app` and POST /)
+│   ├── local_runner.py          # Local CLI runner for interactive use
+│   ├── agent_graph.py           # Agent/supervisor construction and tracing
 │   ├── helpers.py               # Utility functions for UI
 │   └── __init__.py
 ├── evals/                       # Evaluation framework
@@ -134,6 +207,8 @@ langgraph-supervisor/
 ├── requirements.txt             # Python dependencies
 ├── .env.example                # Environment variables template
 ├── .gitignore
+├── scripts/
+│   └── run_queries.py           # Generates N LLM questions and hits the endpoint
 └── README.md
 ```
 

@@ -7,3 +7,5 @@ braintrust
 braintrust_langchain
 rich
 autoevals
+modal
+fastapi[standard]

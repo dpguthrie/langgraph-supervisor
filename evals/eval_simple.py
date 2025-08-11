@@ -3,11 +3,10 @@ Simple evaluation script for the Agent Assistant.
 Run this file to execute basic evaluations.
 """
 
+import re
 import sys
 from pathlib import Path
 from typing import Any
-
-import braintrust
 
 # Add the src directory to Python path to resolve imports
 project_root = Path(__file__).parent.parent
@@ -17,6 +16,7 @@ sys.path.insert(0, str(src_dir))
 from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, init_dataset  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
 
 # Import our supervisor system
 from src.app import supervisor  # noqa: E402
@@ -162,31 +162,56 @@ response_quality_scorer = LLMClassifier(
 )
 
 
+class StepEfficiencyScorer(BaseModel):
+    output: list[dict]
+    max_steps: int = 8
+
+
+async def step_efficiency_scorer(output):
+    """
+    Scores based on the number of steps (messages/tool calls) taken.
+    - output: dict containing the 'messages' list.
+    - max_steps: maximum reasonable number of steps for full score.
+    Returns a score between 0 and 1.
+    """
+    MAX_STEPS = 8
+    messages = output.get("messages", [])
+    num_steps = len(messages)
+    if num_steps <= MAX_STEPS:
+        return 1.0
+    # Linearly penalize extra steps
+    return max(0.0, 1.0 - (num_steps - MAX_STEPS) / MAX_STEPS)
+
+
+class SourceAttributionScorer(BaseModel):
+    output: list[dict]
+
+
+async def source_attribution_scorer(output):
+    """
+    Checks if the final answer includes a credible source (URL).
+    Returns 1.0 if a URL is present, else 0.0.
+    """
+    messages = output.get("messages", [])
+    # Find the last non-empty content message from an AI
+    for msg in reversed(messages):
+        content = msg.get("content", "")
+        if content and msg.get("type") == "ai":
+            if re.search(r"https?://", content):
+                return 1.0
+            break
+    return 0.0
+
+
 # Basic evaluation
 Eval(
     "langgraph-supervisor",
     data=init_dataset("langgraph-supervisor", "Supervisor Agent Dataset"),
     task=run_supervisor_task,
-    scores=[response_quality_scorer, routing_accuracy_scorer],  # type: ignore
-)
-
-
-project = braintrust.projects.create(name="langgraph-supervisor")
-
-project.scorers.create(
-    name="Response Quality",
-    slug="response-quality",
-    messages=[{"role": "system", "content": response_quality_prompt}],
-    choice_scores={"EXCELLENT": 1.0, "GOOD": 0.75, "FAIR": 0.5, "POOR": 0.0},
-    use_cot=True,
-    model="gpt-4o",
-)
-
-project.scorers.create(
-    name="Routing Accuracy",
-    slug="routing-accuracy",
-    messages=[{"role": "system", "content": routing_accuracy_prompt}],
-    choice_scores={"CORRECT": 1, "INCORRECT": 0},
-    use_cot=True,
-    model="gpt-4o",
+    scores=[
+        response_quality_scorer,
+        routing_accuracy_scorer,
+        step_efficiency_scorer,
+        source_attribution_scorer,
+    ],  # type: ignore
 )

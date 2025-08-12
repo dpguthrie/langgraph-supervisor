@@ -37,12 +37,14 @@ def generate_questions(num_questions: int, seed: Optional[int] = None) -> List[s
 def post_question(
     session: requests.Session,
     url: str,
-    token: str,
+    modal_key: str,
+    modal_secret: str,
     question: str,
     timeout_s: float = 30.0,
 ) -> Tuple[str, int, Optional[dict]]:
     headers = {
-        "Authorization": f"Bearer {token}",
+        "Modal-Key": modal_key,
+        "Modal-Secret": modal_secret,
         "Content-Type": "application/json",
     }
     payload = {"q": question}
@@ -71,9 +73,14 @@ def main():
         help="Endpoint URL (e.g., https://...modal.run)",
     )
     parser.add_argument(
-        "--token",
-        default=os.environ.get("ENDPOINT_AUTH_TOKEN", ""),
-        help="Bearer token for Authorization header",
+        "--modal-key",
+        default=os.environ.get("MODAL_PROXY_TOKEN_ID", ""),
+        help="Modal Proxy Auth Token ID (sent as 'Modal-Key' header)",
+    )
+    parser.add_argument(
+        "--modal-secret",
+        default=os.environ.get("MODAL_PROXY_TOKEN_SECRET", ""),
+        help="Modal Proxy Auth Token Secret (sent as 'Modal-Secret' header)",
     )
     parser.add_argument(
         "--count",
@@ -97,9 +104,9 @@ def main():
     )
     args = parser.parse_args()
 
-    if not args.endpoint_url or not args.token:
+    if not args.endpoint_url or not args.modal_key or not args.modal_secret:
         print(
-            "Missing --endpoint-url or --token (or corresponding env vars)",
+            "Missing --endpoint-url or --modal-key or --modal-secret (or corresponding env vars)",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -116,7 +123,12 @@ def main():
         with ThreadPoolExecutor(max_workers=max(1, args.concurrency)) as executor:
             futures = [
                 executor.submit(
-                    post_question, session, args.endpoint_url, args.token, q
+                    post_question,
+                    session,
+                    args.endpoint_url,
+                    args.modal_key,
+                    args.modal_secret,
+                    q,
                 )
                 for q in questions
             ]

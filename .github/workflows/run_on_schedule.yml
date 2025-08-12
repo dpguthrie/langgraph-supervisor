@@ -24,7 +24,8 @@ jobs:
       - name: Run queries
         env:
           MODAL_ENDPOINT_URL: ${{ secrets.MODAL_ENDPOINT_URL }}
-          ENDPOINT_AUTH_TOKEN: ${{ secrets.ENDPOINT_AUTH_TOKEN }}
+          MODAL_PROXY_TOKEN_ID: ${{ secrets.MODAL_PROXY_TOKEN_ID }}
+          MODAL_PROXY_TOKEN_SECRET: ${{ secrets.MODAL_PROXY_TOKEN_SECRET }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           uv run python scripts/run_queries.py

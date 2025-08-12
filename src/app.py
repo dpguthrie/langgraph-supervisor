@@ -1,17 +1,11 @@
-import hmac
-import os
-
 import modal  # type: ignore
-from fastapi import Depends, HTTPException, Request, status  # type: ignore
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer  # type: ignore
+from fastapi import Request  # type: ignore
 from langchain_core.messages import BaseMessage, HumanMessage
 
 from src.agent_graph import get_supervisor
 
 # Build or fetch the cached supervisor graph
 supervisor = get_supervisor()
-
-auth_scheme = HTTPBearer()
 
 
 modal_image = (
@@ -43,29 +37,15 @@ def _serialize_message(message: BaseMessage):
 
 
 @app.function(secrets=_secrets)
-@modal.fastapi_endpoint(method="POST")
+@modal.fastapi_endpoint(method="POST", requires_proxy_auth=True)
 async def chat(
-    request: Request,
+    _request: Request,
     payload: dict,
-    token: HTTPAuthorizationCredentials = Depends(auth_scheme),
 ):
     """HTTP endpoint: {"message": "..."} -> run supervisor and return messages.
 
     Returns a JSON-serializable transcript of messages.
     """
-    # Simple Bearer token using constant-time comparison
-    expected_token = os.environ.get("ENDPOINT_AUTH_TOKEN")
-    if not expected_token:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server not configured",
-        )
-    if not token or not hmac.compare_digest(token.credentials, expected_token):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
 
     user_text = (payload or {}).get("q")
     if not user_text or not str(user_text).strip():

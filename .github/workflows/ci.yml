@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "evals/**"
+      - "src/agent_graph.py"
 
 permissions:
   pull-requests: write

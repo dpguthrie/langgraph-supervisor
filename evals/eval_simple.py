@@ -8,10 +8,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Add the src directory to Python path to resolve imports
-project_root = Path(__file__).parent.parent
-src_dir = project_root / "src"
-sys.path.insert(0, str(src_dir))
+# Ensure project root is on sys.path so `src` package can be imported
+project_root = Path(__file__).resolve().parents[1]
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, init_dataset  # noqa: E402
@@ -24,19 +24,19 @@ from src.app import supervisor  # noqa: E402
 load_dotenv()
 
 
-def run_supervisor_task(input_data: dict, hooks: Any) -> str:
+def run_supervisor_task(input_data: dict, hooks: Any) -> dict[str, list]:
     """Run a single task through the supervisor and return the final response."""
     try:
         # Extract the human message content from the input structure
         messages = input_data.get("messages", [])
         if not messages:
-            return "Error: No messages in input"
+            return {"messages": [{"error": "No messages in input"}]}
 
         # Get the first human message content
         first_message = messages[0]
         user_content = first_message.get("content", "")
         if not user_content:
-            return "Error: No content in first message"
+            return {"messages": [{"error": "No content in first message"}]}
 
         history = [{"role": "user", "content": user_content}]
 
@@ -79,25 +79,12 @@ def run_supervisor_task(input_data: dict, hooks: Any) -> str:
                 }
             )
 
-        # Return the final supervisor response as a string
-        final_response = ""
-        for message in reversed(all_messages):
-            if (
-                hasattr(message, "name")
-                and message.name == "supervisor"
-                and hasattr(message, "content")
-                and message.content
-                and not message.content.startswith("Transferring")
-            ):
-                final_response = message.content
-                break
-
-        return final_response or "No response generated"
+        return {"messages": all_messages}
 
     except Exception as e:
         if hasattr(hooks, "metadata"):
             hooks.metadata.update({"error": str(e)})
-        return f"Error: {str(e)}"
+        return {"messages": [{"error": str(e)}]}
 
 
 # LLM-as-a-Judge Scoring functions

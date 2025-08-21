@@ -2,14 +2,18 @@
 import argparse
 import json
 import os
+import random
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Tuple
 
 import requests
+from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model  # type: ignore
 from langchain_core.messages import HumanMessage  # type: ignore
+
+load_dotenv()
 
 
 def generate_questions(num_questions: int, seed: Optional[int] = None) -> List[str]:
@@ -83,12 +87,6 @@ def main():
         help="Modal Proxy Auth Token Secret (sent as 'Modal-Secret' header)",
     )
     parser.add_argument(
-        "--count",
-        type=int,
-        default=int(os.environ.get("NUM_QUESTIONS", "25")),
-        help="Number of questions to generate",
-    )
-    parser.add_argument(
         "--concurrency",
         type=int,
         default=int(os.environ.get("CONCURRENCY", "8")),
@@ -114,7 +112,7 @@ def main():
         print("Missing OPENAI_API_KEY in environment", file=sys.stderr)
         sys.exit(2)
 
-    questions = generate_questions(args.count, args.seed)
+    questions = generate_questions(random.randint(1, 100), args.seed)
 
     successes = 0
     failures = 0

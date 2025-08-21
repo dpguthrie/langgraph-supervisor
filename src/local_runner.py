@@ -1,6 +1,7 @@
 import getpass
 import os
 
+from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from rich.console import Console
 from rich.panel import Panel
@@ -16,6 +17,8 @@ def _set_if_undefined(var: str):
 
 
 def main():
+    load_dotenv()
+
     _set_if_undefined("OPENAI_API_KEY")
     _set_if_undefined("TAVILY_API_KEY")
     _set_if_undefined("BRAINTRUST_API_KEY")

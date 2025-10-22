@@ -15,11 +15,12 @@ logger = logging.getLogger(__name__)
 ENABLE_TRACE_LOGGING = False
 
 # Internal framework patterns to hide from traces
+# Note: We only hide patterns that are truly redundant. Hiding too much
+# can cause parent spans to hang "in progress" waiting for children to complete.
 HIDDEN_CHAIN_PATTERNS = [
-    "invoke_with_name",      # Subagent wrapper - internal routing
-    "invoke_subagent",       # Subagent invocation - internal
-    "model_to_tools",        # Internal framework routing
-    "tools_to_model",        # Internal framework routing
+    # "invoke_with_name",      # Don't hide - needed for proper span lifecycle
+    # "model_to_tools",        # Don't hide - causes parent spans to hang
+    # "tools_to_model",        # Don't hide - causes parent spans to hang
 ]
 
 
@@ -227,12 +228,11 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
                 resolved_name = f"{subagent_name}.{langgraph_node}"
                 if ENABLE_TRACE_LOGGING:
                     logger.info(f"  → Subagent node: {resolved_name}")
-            # Skip "tools" nodes within subagents - they're just wrappers
+            # Include "tools" nodes but prefix with subagent name
             elif langgraph_node == "tools":
-                self.skipped_runs.add(run_id)
+                resolved_name = f"{subagent_name}.tools"
                 if ENABLE_TRACE_LOGGING:
-                    logger.info(f"  ✗ Hiding subagent tools wrapper: {subagent_name}")
-                return
+                    logger.info(f"  → Subagent tools node: {resolved_name}")
             else:
                 # This is the root subagent span - keep it
                 resolved_name = subagent_name

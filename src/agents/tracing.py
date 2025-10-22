@@ -1,6 +1,8 @@
 """Custom Braintrust tracing utilities for improved observability."""
 
 import logging
+from contextvars import ContextVar
+from functools import wraps
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -19,6 +21,27 @@ HIDDEN_CHAIN_PATTERNS = [
     "model_to_tools",        # Internal framework routing
     "tools_to_model",        # Internal framework routing
 ]
+
+
+def suppress_context_errors(func):
+    """Decorator to suppress contextvars errors in async environments.
+
+    When LangGraph spawns tasks for middleware/subagent execution, those tasks
+    run in different async contexts. This causes issues with Braintrust's use
+    of contextvars. We suppress these errors since the traces still work correctly.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except ValueError as e:
+            if "was created in a different Context" in str(e):
+                # Suppress context variable errors - traces still work
+                if ENABLE_TRACE_LOGGING:
+                    logger.debug(f"Suppressed context error in {func.__name__}: {e}")
+                return None
+            raise
+    return wrapper
 
 
 class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
@@ -254,3 +277,13 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
                 },
             },
         )
+
+    @suppress_context_errors
+    def on_chain_end(self, outputs: Dict[str, Any], *, run_id: UUID, **kwargs: Any) -> Any:
+        """Override to suppress context variable errors in async environments."""
+        return super().on_chain_end(outputs, run_id=run_id, **kwargs)
+
+    @suppress_context_errors
+    def on_llm_end(self, response: Any, *, run_id: UUID, **kwargs: Any) -> Any:
+        """Override to suppress context variable errors in async environments."""
+        return super().on_llm_end(response, run_id=run_id, **kwargs)

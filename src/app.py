@@ -4,15 +4,8 @@ from langchain_core.messages import BaseMessage, HumanMessage
 
 from src.agent_graph import get_supervisor
 
-# Build or fetch the cached supervisor graph
-supervisor = get_supervisor()
 
-
-modal_image = (
-    modal.Image.debian_slim()
-    .uv_pip_install(requirements=["requirements.txt"])
-    .add_local_python_source("src")
-)
+modal_image = modal.Image.debian_slim().uv_sync()
 app = modal.App("langgraph-supervisor-web", image=modal_image)
 
 # Always read secrets from local .env and send them as a Secret
@@ -52,6 +45,9 @@ async def chat(
         return {"error": "Missing 'q' in request body"}
 
     try:
+        # Initialize supervisor inside the function so Modal secrets are available
+        supervisor = get_supervisor()
+
         result = await supervisor.ainvoke(
             {"messages": [HumanMessage(content=str(user_text))]}
         )

@@ -63,6 +63,14 @@ def pretty_print_messages(update, last_message=False):
         is_subgraph = True
 
     for node_name, node_update in update.items():
+        # Skip middleware events that don't have message updates
+        if node_update is None or not isinstance(node_update, dict):
+            continue
+
+        # Skip if no messages in this update
+        if "messages" not in node_update:
+            continue
+
         # Create a header for each node update
         if is_subgraph:
             node_text = Text(f"  ⚡ Node: {node_name}", style="dim cyan")

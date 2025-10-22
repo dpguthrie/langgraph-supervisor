@@ -50,13 +50,24 @@ def main():
             if not user_input.strip():
                 continue
 
-            history = [HumanMessage(content=user_input)]
+            # Append new message to history instead of replacing
+            history.append(HumanMessage(content=user_input))
 
             with console.status("[bold blue]Processing...", spinner="dots"):
                 pass
 
+            # Capture the final state to update history with assistant responses
+            final_state = None
             for event in supervisor.stream({"messages": history}):
                 pretty_print_messages(event)
+                # Track the latest state
+                for _, node_update in event.items():
+                    if node_update and isinstance(node_update, dict) and "messages" in node_update:
+                        final_state = node_update
+
+            # Update history with all messages from the final state
+            if final_state and "messages" in final_state:
+                history = final_state["messages"]
 
         except KeyboardInterrupt:
             console.print("\n[bold yellow]👋 Goodbye![/bold yellow]")

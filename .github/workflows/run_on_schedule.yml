@@ -2,7 +2,7 @@ name: Daily modal queries
 on:
   schedule:
     - cron: "0 6 * * *"  # daily at 06:00 UTC
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 jobs:
   run-queries:

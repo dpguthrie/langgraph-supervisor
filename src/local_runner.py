@@ -1,6 +1,7 @@
 import getpass
 import os
 
+from braintrust import init_logger
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from rich.console import Console
@@ -8,6 +9,7 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.text import Text
 
+from src.agents.tracing import ImprovedBraintrustCallbackHandler
 from src.helpers import pretty_print_messages
 
 
@@ -53,12 +55,21 @@ def main():
             # Append new message to history instead of replacing
             history.append(HumanMessage(content=user_input))
 
+            # Create a new Braintrust callback handler for this turn
+            logger = init_logger(
+                project="langgraph-supervisor", api_key=os.environ.get("BRAINTRUST_API_KEY")
+            )
+            callback_handler = ImprovedBraintrustCallbackHandler(logger=logger)
+
             with console.status("[bold blue]Processing...", spinner="dots"):
                 pass
 
             # Capture the final state to update history with assistant responses
             final_state = None
-            for event in supervisor.stream({"messages": history}):
+            for event in supervisor.stream(
+                {"messages": history},
+                config={"callbacks": [callback_handler]}
+            ):
                 pretty_print_messages(event)
                 # Track the latest state
                 for _, node_update in event.items():

@@ -1,8 +1,12 @@
+import os
+
 import modal  # type: ignore
+from braintrust import init_logger
 from fastapi import Request  # type: ignore
 from langchain_core.messages import BaseMessage, HumanMessage
 
 from src.agent_graph import get_supervisor
+from src.agents.tracing import ImprovedBraintrustCallbackHandler
 
 
 modal_image = (
@@ -52,8 +56,15 @@ async def chat(
         # Initialize supervisor inside the function so Modal secrets are available
         supervisor = get_supervisor()
 
+        # Create a new Braintrust callback handler for this request to avoid context issues
+        logger = init_logger(
+            project="langgraph-supervisor", api_key=os.environ.get("BRAINTRUST_API_KEY")
+        )
+        callback_handler = ImprovedBraintrustCallbackHandler(logger=logger)
+
         result = await supervisor.ainvoke(
-            {"messages": [HumanMessage(content=str(user_text))]}
+            {"messages": [HumanMessage(content=str(user_text))]},
+            config={"callbacks": [callback_handler]}
         )
         messages = result.get("messages", []) if isinstance(result, dict) else []
         serialized = [

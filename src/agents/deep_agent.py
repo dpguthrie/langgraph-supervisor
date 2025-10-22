@@ -3,8 +3,6 @@
 import os
 from typing import Any, TypedDict
 
-from braintrust import init_logger
-from braintrust_langchain import set_global_handler
 from deepagents.middleware.subagents import SubAgentMiddleware
 from langchain.agents import create_agent
 from langchain.agents.middleware.summarization import SummarizationMiddleware
@@ -14,7 +12,6 @@ from langchain_core.runnables import Runnable, RunnableConfig, RunnableLambda
 from src.agents.math_agent import get_math_agent
 from src.agents.research_agent import get_research_agent
 from src.agents.state import AgentState
-from src.agents.tracing import ImprovedBraintrustCallbackHandler
 
 
 class CompiledSubAgent(TypedDict):
@@ -158,12 +155,6 @@ def get_deep_agent():
         middleware=deepagent_middleware,
         state_schema=AgentState,
     ).with_config({"recursion_limit": 1000})
-
-    # Initialize tracing
-    logger = init_logger(
-        project="langgraph-supervisor", api_key=os.environ.get("BRAINTRUST_API_KEY")
-    )
-    set_global_handler(ImprovedBraintrustCallbackHandler(logger=logger))
 
     return agent
 

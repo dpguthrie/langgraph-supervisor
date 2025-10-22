@@ -5,7 +5,11 @@ from langchain_core.messages import BaseMessage, HumanMessage
 from src.agent_graph import get_supervisor
 
 
-modal_image = modal.Image.debian_slim().uv_sync()
+modal_image = (
+    modal.Image.debian_slim()
+    .uv_sync()
+    .add_local_python_source("src")
+)
 app = modal.App("langgraph-supervisor-web", image=modal_image)
 
 # Always read secrets from local .env and send them as a Secret

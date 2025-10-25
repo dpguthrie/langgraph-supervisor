@@ -43,6 +43,7 @@ dependencies = [
     "autoevals==0.0.130",
     "modal==1.2.0",
     "fastapi[standard]==0.119.1",
+    "ipython>=9.6.0",
 ]
 
 [project.optional-dependencies]

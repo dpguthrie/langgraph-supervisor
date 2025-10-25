@@ -1,8 +1,6 @@
 """Custom Braintrust tracing utilities for improved observability."""
 
 import logging
-from contextvars import ContextVar
-from functools import wraps
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -13,36 +11,6 @@ logger = logging.getLogger(__name__)
 
 # Set to True to enable detailed tracing debug logs
 ENABLE_TRACE_LOGGING = False
-
-# Internal framework patterns to hide from traces
-# Note: We only hide patterns that are truly redundant. Hiding too much
-# can cause parent spans to hang "in progress" waiting for children to complete.
-HIDDEN_CHAIN_PATTERNS = [
-    # "invoke_with_name",      # Don't hide - needed for proper span lifecycle
-    # "model_to_tools",        # Don't hide - causes parent spans to hang
-    # "tools_to_model",        # Don't hide - causes parent spans to hang
-]
-
-
-def suppress_context_errors(func):
-    """Decorator to suppress contextvars errors in async environments.
-
-    When LangGraph spawns tasks for middleware/subagent execution, those tasks
-    run in different async contexts. This causes issues with Braintrust's use
-    of contextvars. We suppress these errors since the traces still work correctly.
-    """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except ValueError as e:
-            if "was created in a different Context" in str(e):
-                # Suppress context variable errors - traces still work
-                if ENABLE_TRACE_LOGGING:
-                    logger.debug(f"Suppressed context error in {func.__name__}: {e}")
-                return None
-            raise
-    return wrapper
 
 
 class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
@@ -74,6 +42,78 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
     in deep_agent.py.
     """
 
+    def on_llm_start(
+        self,
+        serialized: Dict[str, Any],
+        prompts: List[str],
+        *,
+        run_id: UUID,
+        parent_run_id: Optional[UUID] = None,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        name: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Override to disable context tracking."""
+        from braintrust_langchain.callbacks import last_item
+
+        name = name or serialized.get("name") or last_item(serialized.get("id") or []) or "LLM"
+
+        self._start_span(
+            parent_run_id,
+            run_id,
+            name=name,
+            type=SpanTypeAttribute.LLM,
+            set_current=False,  # Disable context tracking to avoid cross-context errors
+            event={
+                "input": prompts,
+                "tags": tags,
+                "metadata": {
+                    "serialized": serialized,
+                    "name": name,
+                    "metadata": metadata,
+                    **kwargs,
+                },
+            },
+        )
+
+    def on_chat_model_start(
+        self,
+        serialized: Dict[str, Any],
+        messages: List[List],
+        *,
+        run_id: UUID,
+        parent_run_id: Optional[UUID] = None,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        name: Optional[str] = None,
+        invocation_params: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Override to disable context tracking."""
+        from braintrust_langchain.callbacks import last_item
+
+        invocation_params = invocation_params or {}
+
+        self._start_span(
+            parent_run_id,
+            run_id,
+            name=name or serialized.get("name") or last_item(serialized.get("id") or []) or "Chat Model",
+            type=SpanTypeAttribute.LLM,
+            set_current=False,  # Disable context tracking to avoid cross-context errors
+            event={
+                "input": messages,
+                "tags": tags,
+                "metadata": {
+                    "serialized": serialized,
+                    "invocation_params": invocation_params,
+                    "metadata": metadata or {},
+                    "name": name,
+                    **kwargs,
+                },
+            },
+        )
+
     def on_tool_start(
         self,
         serialized: Dict[str, Any],
@@ -93,13 +133,6 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
         # Determine if this is a subagent tool call
         tool_name = name or serialized.get("name") or last_item(serialized.get("id") or []) or "Tool"
 
-        # Log for debugging trace hierarchy
-        if ENABLE_TRACE_LOGGING:
-            logger.info(
-                f"on_tool_start: name={tool_name}, tags={tags}, "
-                f"metadata={metadata}, parent_run_id={parent_run_id}, run_id={run_id}"
-            )
-
         # Determine the context from tags and metadata
         langgraph_node = metadata.get("langgraph_node") if metadata else None
         subagent_tags = [tag for tag in (tags or []) if tag.startswith("subagent:")]
@@ -115,21 +148,15 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
         if is_subagent_launcher:
             # This is the subagent launcher - name it after the subagent
             subagent_type = inputs.get("subagent_type", "Unknown Agent") if inputs else "Unknown Agent"
-            tool_name = subagent_type
+            tool_name = f"invoke_{subagent_type.lower().replace(' ', '_')}"
             span_type = SpanTypeAttribute.TASK
-            if ENABLE_TRACE_LOGGING:
-                logger.info(f"  → Detected subagent launcher for: {subagent_type}")
         elif current_subagent:
             # We're inside a subagent - prefix tool name with subagent
             tool_name = f"{current_subagent}.{tool_name}"
             span_type = SpanTypeAttribute.TOOL
-            if ENABLE_TRACE_LOGGING:
-                logger.info(f"  → Tool within subagent: {tool_name}")
         else:
             # Regular tool call
             span_type = SpanTypeAttribute.TOOL
-            if ENABLE_TRACE_LOGGING:
-                logger.info(f"  → Regular tool: {tool_name}")
 
         # Create serializable inputs - remove non-JSON-serializable objects like ToolRuntime
         safe_inputs = None
@@ -153,6 +180,7 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
             run_id,
             name=tool_name,
             type=span_type,
+            set_current=False,  # Disable context tracking to avoid cross-context errors
             event={
                 "input": safe_inputs or safe_parse_serialized_json(input_str),
                 "tags": tags,
@@ -190,24 +218,10 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
             self.skipped_runs.add(run_id)
             return
 
-        # Hide internal framework chains that clutter traces
-        if name in HIDDEN_CHAIN_PATTERNS:
-            self.skipped_runs.add(run_id)
-            if ENABLE_TRACE_LOGGING:
-                logger.info(f"  ✗ Hiding internal chain: {name}")
-            return
-
         metadata = metadata or {}
 
         # Improved name resolution
         langgraph_node = metadata.get("langgraph_node")
-
-        # Log for debugging trace hierarchy
-        if ENABLE_TRACE_LOGGING:
-            logger.info(
-                f"on_chain_start: name={name}, langgraph_node={langgraph_node}, tags={tags}, "
-                f"parent_run_id={parent_run_id}, run_id={run_id}"
-            )
 
         # Check if this is a subagent-related node
         subagent_tags = [tag for tag in tags if tag.startswith("subagent:")]
@@ -221,29 +235,15 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
             # Check if this is the wrapper function (invoke_with_name)
             if name == "invoke_with_name":
                 resolved_name = f"→ {subagent_name}"
-                if ENABLE_TRACE_LOGGING:
-                    logger.info(f"  → Subagent wrapper: {resolved_name}")
             # If this is a node within a subagent graph, prefix with subagent name
             elif langgraph_node and langgraph_node != "tools":
                 resolved_name = f"{subagent_name}.{langgraph_node}"
-                if ENABLE_TRACE_LOGGING:
-                    logger.info(f"  → Subagent node: {resolved_name}")
-            # Include "tools" nodes but prefix with subagent name
-            elif langgraph_node == "tools":
-                resolved_name = f"{subagent_name}.tools"
-                if ENABLE_TRACE_LOGGING:
-                    logger.info(f"  → Subagent tools node: {resolved_name}")
             else:
-                # This is the root subagent span - keep it
                 resolved_name = subagent_name
-                if ENABLE_TRACE_LOGGING:
-                    logger.info(f"  → Subagent root: {resolved_name}")
         else:
             # Check if this is the wrapper function before subagent tags are applied
             if name == "invoke_with_name":
                 resolved_name = "invoke_subagent"
-                if ENABLE_TRACE_LOGGING:
-                    logger.info(f"  → Subagent invocation wrapper: {resolved_name}")
             else:
                 resolved_name = (
                     langgraph_node
@@ -253,17 +253,20 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
                     or "Chain"
                 )
 
-                # Rename "LangGraph" to something more meaningful
-                if resolved_name == "LangGraph":
-                    resolved_name = "Supervisor Agent"
-
-                if ENABLE_TRACE_LOGGING:
-                    logger.info(f"  → Regular chain: {resolved_name}")
+                # Replace generic "LangGraph" name with something more descriptive
+                if resolved_name == "LangGraph" or resolved_name == "RunnableSequence":
+                    # Check if this is the top-level deep agent (no parent)
+                    if parent_run_id is None:
+                        resolved_name = "Supervisor Agent"
+                    else:
+                        # For nested LangGraph chains, use a more generic name
+                        resolved_name = "Agent Graph"
 
         self._start_span(
             parent_run_id,
             run_id,
             name=resolved_name,
+            set_current=False,  # Disable context tracking to avoid cross-context errors
             event={
                 "input": inputs,
                 "tags": tags,
@@ -278,12 +281,20 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
             },
         )
 
-    @suppress_context_errors
     def on_chain_end(self, outputs: Dict[str, Any], *, run_id: UUID, **kwargs: Any) -> Any:
-        """Override to suppress context variable errors in async environments."""
+        """Override to handle skipped runs."""
+        if run_id in self.skipped_runs:
+            return
         return super().on_chain_end(outputs, run_id=run_id, **kwargs)
 
-    @suppress_context_errors
     def on_llm_end(self, response: Any, *, run_id: UUID, **kwargs: Any) -> Any:
-        """Override to suppress context variable errors in async environments."""
+        """Override to handle skipped runs."""
+        if run_id in self.skipped_runs:
+            return
         return super().on_llm_end(response, run_id=run_id, **kwargs)
+
+    def on_tool_end(self, output: Any, *, run_id: UUID, **kwargs: Any) -> Any:
+        """Override to handle skipped runs."""
+        if run_id in self.skipped_runs:
+            return
+        return super().on_tool_end(output, run_id=run_id, **kwargs)

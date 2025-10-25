@@ -7,7 +7,6 @@ from braintrust import init_logger
 from braintrust_langchain import set_global_handler
 from deepagents.middleware.subagents import SubAgentMiddleware
 from langchain.agents import create_agent
-from langchain.agents.middleware.summarization import SummarizationMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.runnables import Runnable, RunnableConfig, RunnableLambda
 
@@ -74,7 +73,9 @@ def _get_sub_agents() -> list[CompiledSubAgent]:
                 "looking up current events, researching topics, gathering data from the internet, "
                 "answering questions that require external knowledge or real-time information."
             ),
-            runnable=create_named_subagent_wrapper("Research Agent", get_research_agent()),
+            runnable=create_named_subagent_wrapper(
+                "Research Agent", get_research_agent()
+            ),
         ),
         CompiledSubAgent(
             name="Math Agent",
@@ -87,6 +88,7 @@ def _get_sub_agents() -> list[CompiledSubAgent]:
             runnable=create_named_subagent_wrapper("Math Agent", get_math_agent()),
         ),
     ]
+
 
 SYSTEM_PROMPT = """
 You are a helpful AI assistant that can delegate tasks to specialized agents when needed.
@@ -132,20 +134,8 @@ def get_deep_agent():
             default_model=model,
             default_tools=None,
             subagents=sub_agents,  # type: ignore
-            default_middleware=[
-                SummarizationMiddleware(
-                    model=model,
-                    max_tokens_before_summary=100000,
-                    messages_to_keep=6,
-                ),
-            ],
             default_interrupt_on=None,
             general_purpose_agent=True,
-        ),
-        SummarizationMiddleware(
-            model=model,
-            max_tokens_before_summary=100000,
-            messages_to_keep=6,
         ),
     ]
 

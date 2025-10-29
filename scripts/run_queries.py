@@ -20,7 +20,7 @@ def generate_questions(num_questions: int, seed: Optional[int] = None) -> List[s
     """Generate questions using an LLM (OpenAI via LangChain)."""
     if seed is None:
         seed = int(time.time())
-    model = init_chat_model("openai:gpt-4.1")
+    model = init_chat_model("openai:gpt-4.1", temperature=0.9)
     prompt = (
         "Generate exactly "
         f"{num_questions}"

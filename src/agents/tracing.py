@@ -57,7 +57,12 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
         """Override to disable context tracking."""
         from braintrust_langchain.callbacks import last_item
 
-        name = name or serialized.get("name") or last_item(serialized.get("id") or []) or "LLM"
+        name = (
+            name
+            or serialized.get("name")
+            or last_item(serialized.get("id") or [])
+            or "LLM"
+        )
 
         self._start_span(
             parent_run_id,
@@ -98,7 +103,10 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
         self._start_span(
             parent_run_id,
             run_id,
-            name=name or serialized.get("name") or last_item(serialized.get("id") or []) or "Chat Model",
+            name=name
+            or serialized.get("name")
+            or last_item(serialized.get("id") or [])
+            or "Chat Model",
             type=SpanTypeAttribute.LLM,
             set_current=False,  # Disable context tracking to avoid cross-context errors
             event={
@@ -131,7 +139,12 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
         from braintrust_langchain.callbacks import last_item, safe_parse_serialized_json
 
         # Determine if this is a subagent tool call
-        tool_name = name or serialized.get("name") or last_item(serialized.get("id") or []) or "Tool"
+        tool_name = (
+            name
+            or serialized.get("name")
+            or last_item(serialized.get("id") or [])
+            or "Tool"
+        )
 
         # Determine the context from tags and metadata
         langgraph_node = metadata.get("langgraph_node") if metadata else None
@@ -143,11 +156,17 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
             current_subagent = subagent_tags[0].replace("subagent:", "")
 
         # Check if this tool IS a subagent launcher
-        is_subagent_launcher = tool_name == "task" and inputs is not None and "subagent_type" in inputs
+        is_subagent_launcher = (
+            tool_name == "task" and inputs is not None and "subagent_type" in inputs
+        )
 
         if is_subagent_launcher:
             # This is the subagent launcher - name it after the subagent
-            subagent_type = inputs.get("subagent_type", "Unknown Agent") if inputs else "Unknown Agent"
+            subagent_type = (
+                inputs.get("subagent_type", "Unknown Agent")
+                if inputs
+                else "Unknown Agent"
+            )
             tool_name = f"invoke_{subagent_type.lower().replace(' ', '_')}"
             span_type = SpanTypeAttribute.TASK
         elif current_subagent:
@@ -164,16 +183,23 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
             safe_inputs = {}
             for k, v in inputs.items():
                 # Skip runtime objects and other non-serializable items
-                if k == "runtime" or hasattr(v, "__class__") and "Runtime" in v.__class__.__name__:
+                if (
+                    k == "runtime"
+                    or hasattr(v, "__class__")
+                    and "Runtime" in v.__class__.__name__
+                ):
                     safe_inputs[k] = f"<{type(v).__name__}>"
                 else:
                     try:
                         # Try to serialize to verify it's JSON-safe
                         import json
+
                         json.dumps(v)
                         safe_inputs[k] = v
                     except (TypeError, ValueError):
-                        safe_inputs[k] = str(v)[:200]  # Truncate long string representations
+                        safe_inputs[k] = str(v)[
+                            :200
+                        ]  # Truncate long string representations
 
         self._start_span(
             parent_run_id,
@@ -281,7 +307,9 @@ class ImprovedBraintrustCallbackHandler(BraintrustCallbackHandler):
             },
         )
 
-    def on_chain_end(self, outputs: Dict[str, Any], *, run_id: UUID, **kwargs: Any) -> Any:
+    def on_chain_end(
+        self, outputs: Dict[str, Any], *, run_id: UUID, **kwargs: Any
+    ) -> Any:
         """Override to handle skipped runs."""
         if run_id in self.skipped_runs:
             return

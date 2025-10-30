@@ -24,23 +24,28 @@ def divide(a: float, b: float) -> float:
     return a / b
 
 
-def get_math_agent():
-    """Create math agent with calculator tools.
+def get_math_agent(
+    system_prompt: str | None = None,
+    model: str = "gpt-4o-mini"
+):
+    """Create math agent with optional custom prompt and model.
 
-    This agent is specialized for:
-    - Mathematical calculations
-    - Arithmetic operations
-    - Addition, subtraction, multiplication, division
-    - Numerical computations
+    Args:
+        system_prompt: Custom system prompt. If None, uses default.
+        model: Model name to use (default: gpt-4o-mini)
     """
+    # Use provided prompt or fall back to default
+    prompt = system_prompt if system_prompt is not None else (
+        "You are a math agent.\n\n"
+        "INSTRUCTIONS:\n"
+        "- Assist ONLY with math-related tasks\n"
+        "- After you're done with your tasks, respond to the supervisor directly\n"
+        "- Respond ONLY with the results of your work, do NOT include ANY other text."
+    )
+
+    tools = [add, subtract, multiply, divide]
     return create_agent(
-        model=init_chat_model("openai:gpt-4o-mini"),
-        tools=[add, subtract, multiply, divide],
-        system_prompt=(
-            "You are a math agent.\n\n"
-            "INSTRUCTIONS:\n"
-            "- Assist ONLY with math-related tasks\n"
-            "- After you're done with your tasks, respond to the supervisor directly\n"
-            "- Respond ONLY with the results of your work, do NOT include ANY other text."
-        ),
+        model=init_chat_model(f"openai:{model}"),
+        tools=tools,
+        system_prompt=prompt,
     )

@@ -14,6 +14,7 @@ from src.agents.math_agent import get_math_agent
 from src.agents.research_agent import get_research_agent
 from src.agents.state import AgentState
 from src.agents.tracing import ImprovedBraintrustCallbackHandler
+from src.config import AgentConfig
 
 
 class CompiledSubAgent(TypedDict):
@@ -58,34 +59,56 @@ def create_named_subagent_wrapper(subagent_name: str, subagent: Runnable) -> Run
     return RunnableLambda(invoke_with_name, ainvoke_with_name)
 
 
-def _get_sub_agents() -> list[CompiledSubAgent]:
+def _get_sub_agents(config: AgentConfig | None = None) -> list[CompiledSubAgent]:
     """Lazily initialize subagents at runtime (not import time).
 
     This is important for Modal deployment where environment variables
     and secrets aren't available until the function actually runs.
+
+    Args:
+        config: Optional configuration for agent prompts, models, and descriptions.
+                If None, uses defaults.
     """
+    if config is None:
+        config = AgentConfig()
+
+    # Use config descriptions or fall back to defaults
+    research_desc = config.research_agent_description or (
+        "Research agent with web search capabilities. "
+        "Use this agent for: web searches, finding information online, "
+        "looking up current events, researching topics, gathering data from the internet, "
+        "answering questions that require external knowledge or real-time information."
+    )
+
+    math_desc = config.math_agent_description or (
+        "Math calculation agent with arithmetic tools. "
+        "Use this agent for: mathematical calculations, arithmetic operations, "
+        "addition, subtraction, multiplication, division, numerical computations, "
+        "solving math problems, performing calculations."
+    )
+
     return [
         CompiledSubAgent(
             name="Research Agent",
-            description=(
-                "Research agent with web search capabilities. "
-                "Use this agent for: web searches, finding information online, "
-                "looking up current events, researching topics, gathering data from the internet, "
-                "answering questions that require external knowledge or real-time information."
-            ),
+            description=research_desc,
             runnable=create_named_subagent_wrapper(
-                "Research Agent", get_research_agent()
+                "Research Agent",
+                get_research_agent(
+                    system_prompt=config.research_agent_prompt,
+                    model=config.research_model,
+                ),
             ),
         ),
         CompiledSubAgent(
             name="Math Agent",
-            description=(
-                "Math calculation agent with arithmetic tools. "
-                "Use this agent for: mathematical calculations, arithmetic operations, "
-                "addition, subtraction, multiplication, division, numerical computations, "
-                "solving math problems, performing calculations."
+            description=math_desc,
+            runnable=create_named_subagent_wrapper(
+                "Math Agent",
+                get_math_agent(
+                    system_prompt=config.math_agent_prompt,
+                    model=config.math_model,
+                ),
             ),
-            runnable=create_named_subagent_wrapper("Math Agent", get_math_agent()),
         ),
     ]
 
@@ -111,22 +134,30 @@ IMPORTANT INSTRUCTIONS:
 """
 
 
-def get_deep_agent():
+def get_deep_agent(config: AgentConfig | None = None):
     """Create the main deep agent with subagent routing.
 
     This creates an orchestrator agent that automatically routes user queries
     to specialized subagents based on their descriptions.
 
+    Args:
+        config: Optional configuration for agent prompts, models, and descriptions.
+                If None, uses defaults from module constants.
+
     Returns:
         Compiled agent with middleware stack
     """
-    # Initialize model
+    if config is None:
+        config = AgentConfig()
+
+    # Initialize supervisor model with configured model
     model = init_chat_model(
-        model="openai:gpt-4o-mini", api_key=os.environ.get("OPENAI_API_KEY")
+        model=f"openai:{config.supervisor_model}",
+        api_key=os.environ.get("OPENAI_API_KEY"),
     )
 
-    # Get subagents at runtime (not import time)
-    sub_agents = _get_sub_agents()
+    # Get subagents with config at runtime (not import time)
+    sub_agents = _get_sub_agents(config)
 
     # Define middleware stack
     deepagent_middleware = [
@@ -139,11 +170,18 @@ def get_deep_agent():
         ),
     ]
 
-    # Create agent with state schema
+    # Use config system prompt or fall back to default
     BASE_AGENT_PROMPT = "In order to complete the objective that the user asks of you, you have access to specialized agents."
+    system_prompt = (
+        config.system_prompt
+        if config.system_prompt
+        else (SYSTEM_PROMPT + "\n\n" + BASE_AGENT_PROMPT)
+    )
+
+    # Create agent with state schema
     agent = create_agent(
         model,
-        system_prompt=SYSTEM_PROMPT + "\n\n" + BASE_AGENT_PROMPT,
+        system_prompt=system_prompt,
         tools=None,
         middleware=deepagent_middleware,
         state_schema=AgentState,
@@ -162,16 +200,26 @@ def get_deep_agent():
 _cached_deep_agent = None
 
 
-def get_supervisor(force_rebuild: bool = False):
+def get_supervisor(config: AgentConfig | None = None, force_rebuild: bool = False):
     """Get the deep agent (maintains compatibility with old API).
 
     Args:
-        force_rebuild: If True, rebuild the agent even if cached
+        config: Optional configuration for agent prompts, models, and descriptions.
+                If provided, caching is disabled and a new agent is always built.
+                If None, uses cached agent with defaults.
+        force_rebuild: If True, rebuild the agent even if cached. Only applies when
+                      config is None.
 
     Returns:
         The cached or newly built deep agent
     """
     global _cached_deep_agent
+
+    # If custom config is provided, always build fresh (no caching)
+    if config is not None:
+        return get_deep_agent(config)
+
+    # Otherwise use caching for default config
     if force_rebuild or _cached_deep_agent is None:
         _cached_deep_agent = get_deep_agent()
     return _cached_deep_agent

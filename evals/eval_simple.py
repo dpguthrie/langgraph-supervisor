@@ -19,14 +19,38 @@ from dotenv import load_dotenv  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 # Import our supervisor system
-from src.app import supervisor  # noqa: E402
+from src.agents.deep_agent import get_supervisor  # noqa: E402
+from src.config import AgentConfig  # noqa: E402
 
 load_dotenv()
 
 
-def run_supervisor_task(input_data: dict, hooks: Any) -> dict[str, list]:
-    """Run a single task through the supervisor and return the final response."""
+def run_supervisor_task(
+    input_data: dict, hooks: Any, parameters: dict | None = None
+) -> dict[str, list]:
+    """Run a single task through the supervisor and return the final response.
+
+    Args:
+        input_data: Input data containing messages
+        hooks: Braintrust hooks for metadata tracking
+        parameters: Optional dict of configuration parameters for remote evals.
+                   Supports: system_prompt, research_agent_prompt, math_agent_prompt,
+                   research_agent_description, math_agent_description,
+                   supervisor_model, research_model, math_model
+
+    Returns:
+        Dict containing messages from the supervisor execution
+    """
     try:
+        # Build AgentConfig from parameters (if provided)
+        params = parameters or {}
+        # Filter out None values to use defaults from AgentConfig
+        config_params = {k: v for k, v in params.items() if v is not None}
+        config = AgentConfig(**config_params) if config_params else None
+
+        # Get supervisor with config (or default if config is None)
+        supervisor = get_supervisor(config)
+
         # Extract the human message content from the input structure
         messages = input_data.get("messages", [])
         if not messages:

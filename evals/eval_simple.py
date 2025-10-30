@@ -113,6 +113,43 @@ def unwrap_parameters(params: dict) -> dict:
     return config_params
 
 
+def serialize_message(msg: Any) -> dict:
+    """Convert a LangChain message object to a JSON-serializable dict.
+
+    Args:
+        msg: LangChain message object (AIMessage, HumanMessage, etc.)
+
+    Returns:
+        Dict with message content and metadata
+    """
+    # Handle different message types
+    if hasattr(msg, "content"):
+        result = {
+            "content": msg.content,
+            "role": getattr(msg, "role", getattr(msg, "type", "unknown")),
+        }
+
+        # Add tool calls if present
+        if hasattr(msg, "tool_calls") and msg.tool_calls:
+            result["tool_calls"] = [
+                {
+                    "name": tc.get("name", ""),
+                    "args": tc.get("args", {}),
+                    "id": tc.get("id", ""),
+                }
+                for tc in msg.tool_calls
+            ]
+
+        # Add additional response metadata if present
+        if hasattr(msg, "response_metadata") and msg.response_metadata:
+            result["response_metadata"] = msg.response_metadata
+
+        return result
+    else:
+        # Fallback for dict-like objects
+        return msg if isinstance(msg, dict) else {"content": str(msg)}
+
+
 def run_supervisor_task(input_data: dict, hooks: Any = None) -> dict[str, list]:
     """Run a single task through the supervisor and return the final response.
 
@@ -190,7 +227,10 @@ def run_supervisor_task(input_data: dict, hooks: Any = None) -> dict[str, list]:
                 }
             )
 
-        return {"messages": all_messages}
+        # Serialize messages to JSON-serializable format
+        serialized_messages = [serialize_message(msg) for msg in all_messages]
+
+        return {"messages": serialized_messages}
 
     except Exception as e:
         if hooks and hasattr(hooks, "metadata"):
@@ -293,8 +333,11 @@ async def source_attribution_scorer(output):
     messages = output.get("messages", [])
     # Find the last non-empty content message from an AI
     for msg in reversed(messages):
-        content = msg.content
-        if content and msg.role == "assistant":
+        # Messages are now dicts after serialization
+        content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
+        role = msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "role", "")
+
+        if content and role == "assistant":
             if re.search(r"https?://", content):
                 return 1.0
             break

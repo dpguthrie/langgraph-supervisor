@@ -82,6 +82,37 @@ class MathModelParam(BaseModel):
     )
 
 
+def unwrap_parameters(params: dict) -> dict:
+    """Unwrap Pydantic parameter models to extract actual field values.
+
+    Braintrust wraps each parameter in its Pydantic model instance. This function
+    extracts the actual field values from those models.
+
+    Args:
+        params: Dict of parameter names to Pydantic model instances
+
+    Returns:
+        Dict of parameter names to unwrapped field values (filters out None)
+
+    Example:
+        Input:  {"system_prompt": SystemPromptParam(system_prompt="Hello")}
+        Output: {"system_prompt": "Hello"}
+    """
+    config_params = {}
+    for key, value in params.items():
+        # Check if this is a Pydantic model instance that needs unwrapping
+        if isinstance(value, BaseModel):
+            # Get the actual field value from the model
+            # The field name matches the key name in our parameter definitions
+            field_value = getattr(value, key, None)
+            if field_value is not None:
+                config_params[key] = field_value
+        elif value is not None:
+            # Direct value (shouldn't happen with our setup, but handle it)
+            config_params[key] = value
+    return config_params
+
+
 def run_supervisor_task(input_data: dict, hooks: Any = None) -> dict[str, list]:
     """Run a single task through the supervisor and return the final response.
 
@@ -100,22 +131,8 @@ def run_supervisor_task(input_data: dict, hooks: Any = None) -> dict[str, list]:
         # When running remotely: hooks.parameters contains the config values
         params = hooks.parameters if hooks and hasattr(hooks, "parameters") else {}
 
-        # Unwrap Pydantic parameter models to extract actual values
-        # Braintrust wraps each parameter in its Pydantic model, so we need to extract
-        # the field value (e.g., SystemPromptParam.system_prompt -> str value)
-        config_params = {}
-        for key, value in params.items():
-            # Check if this is a Pydantic model instance that needs unwrapping
-            if isinstance(value, BaseModel):
-                # Get the actual field value from the model
-                # The field name matches the key name in our parameter definitions
-                field_value = getattr(value, key, None)
-                if field_value is not None:
-                    config_params[key] = field_value
-            elif value is not None:
-                # Direct value (shouldn't happen with our setup, but handle it)
-                config_params[key] = value
-
+        # Unwrap Pydantic parameter models to extract actual field values
+        config_params = unwrap_parameters(params)
         config = AgentConfig(**config_params) if config_params else None
 
         # Get supervisor with config (or default if config is None)

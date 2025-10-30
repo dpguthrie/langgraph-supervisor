@@ -16,7 +16,7 @@ if str(project_root) not in sys.path:
 from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, init_dataset  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
-from pydantic import BaseModel  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
 
 # Import our supervisor system
 from src.agents.deep_agent import get_supervisor  # noqa: E402
@@ -25,25 +25,81 @@ from src.config import AgentConfig  # noqa: E402
 load_dotenv()
 
 
-def run_supervisor_task(
-    input_data: dict, hooks: Any = None, parameters: dict | None = None
-) -> dict[str, list]:
+# Parameter definitions for remote evals
+class SystemPromptParam(BaseModel):
+    system_prompt: str | None = Field(
+        default=None,
+        description="Custom system prompt for the supervisor agent. If None, uses the default prompt.",
+    )
+
+
+class ResearchAgentPromptParam(BaseModel):
+    research_agent_prompt: str | None = Field(
+        default=None,
+        description="Custom system prompt for the research agent. If None, uses the default prompt.",
+    )
+
+
+class MathAgentPromptParam(BaseModel):
+    math_agent_prompt: str | None = Field(
+        default=None,
+        description="Custom system prompt for the math agent. If None, uses the default prompt.",
+    )
+
+
+class ResearchAgentDescriptionParam(BaseModel):
+    research_agent_description: str | None = Field(
+        default=None,
+        description="Custom routing description for the research agent. Used by the supervisor to decide when to route to this agent.",
+    )
+
+
+class MathAgentDescriptionParam(BaseModel):
+    math_agent_description: str | None = Field(
+        default=None,
+        description="Custom routing description for the math agent. Used by the supervisor to decide when to route to this agent.",
+    )
+
+
+class SupervisorModelParam(BaseModel):
+    supervisor_model: str = Field(
+        default="gpt-4o-mini",
+        description="Model to use for the supervisor agent (e.g., gpt-4o-mini, gpt-4o).",
+    )
+
+
+class ResearchModelParam(BaseModel):
+    research_model: str = Field(
+        default="gpt-4o-mini",
+        description="Model to use for the research agent (e.g., gpt-4o-mini, gpt-4o).",
+    )
+
+
+class MathModelParam(BaseModel):
+    math_model: str = Field(
+        default="gpt-4o-mini",
+        description="Model to use for the math agent (e.g., gpt-4o-mini, gpt-4o).",
+    )
+
+
+def run_supervisor_task(input_data: dict, hooks: Any = None) -> dict[str, list]:
     """Run a single task through the supervisor and return the final response.
 
     Args:
         input_data: Input data containing messages
-        hooks: Optional Braintrust hooks for metadata tracking
-        parameters: Optional dict of configuration parameters for remote evals.
-                   Supports: system_prompt, research_agent_prompt, math_agent_prompt,
-                   research_agent_description, math_agent_description,
-                   supervisor_model, research_model, math_model
+        hooks: Optional Braintrust hooks for metadata tracking and parameters.
+               When running remotely, hooks.parameters contains the configurable
+               parameters defined in the Eval() constructor.
 
     Returns:
         Dict containing messages from the supervisor execution
     """
     try:
         # Build AgentConfig from parameters (if provided)
-        params = parameters or {}
+        # When running locally: hooks is None, params is empty dict
+        # When running remotely: hooks.parameters contains the config values
+        params = hooks.parameters if hooks and hasattr(hooks, "parameters") else {}
+
         # Filter out None values to use defaults from AgentConfig
         config_params = {k: v for k, v in params.items() if v is not None}
         config = AgentConfig(**config_params) if config_params else None
@@ -206,8 +262,8 @@ async def source_attribution_scorer(output):
     messages = output.get("messages", [])
     # Find the last non-empty content message from an AI
     for msg in reversed(messages):
-        content = msg.get("content", "")
-        if content and msg.get("type") == "ai":
+        content = msg.content
+        if content and msg.role == "assistant":
             if re.search(r"https?://", content):
                 return 1.0
             break
@@ -225,4 +281,17 @@ Eval(
         step_efficiency_scorer,
         source_attribution_scorer,
     ],  # type: ignore
+    parameters={
+        # Prompt parameters
+        "system_prompt": SystemPromptParam,
+        "research_agent_prompt": ResearchAgentPromptParam,
+        "math_agent_prompt": MathAgentPromptParam,
+        # Routing description parameters
+        "research_agent_description": ResearchAgentDescriptionParam,
+        "math_agent_description": MathAgentDescriptionParam,
+        # Model selection parameters
+        "supervisor_model": SupervisorModelParam,
+        "research_model": ResearchModelParam,
+        "math_model": MathModelParam,
+    },
 )

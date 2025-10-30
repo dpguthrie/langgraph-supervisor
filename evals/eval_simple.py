@@ -26,13 +26,13 @@ load_dotenv()
 
 
 def run_supervisor_task(
-    input_data: dict, hooks: Any, parameters: dict | None = None
+    input_data: dict, hooks: Any = None, parameters: dict | None = None
 ) -> dict[str, list]:
     """Run a single task through the supervisor and return the final response.
 
     Args:
         input_data: Input data containing messages
-        hooks: Braintrust hooks for metadata tracking
+        hooks: Optional Braintrust hooks for metadata tracking
         parameters: Optional dict of configuration parameters for remote evals.
                    Supports: system_prompt, research_agent_prompt, math_agent_prompt,
                    research_agent_description, math_agent_description,
@@ -94,7 +94,7 @@ def run_supervisor_task(
                                     agent_used.append("math_agent")
 
         # Add metadata for evaluation
-        if hasattr(hooks, "metadata"):
+        if hooks and hasattr(hooks, "metadata"):
             hooks.metadata.update(
                 {
                     "agent_used": agent_used,
@@ -106,7 +106,7 @@ def run_supervisor_task(
         return {"messages": all_messages}
 
     except Exception as e:
-        if hasattr(hooks, "metadata"):
+        if hooks and hasattr(hooks, "metadata"):
             hooks.metadata.update({"error": str(e)})
         return {"messages": [{"error": str(e)}]}
 

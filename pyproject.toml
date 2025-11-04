@@ -31,18 +31,19 @@ classifiers = [
 ]
 
 dependencies = [
-    "langgraph==1.0.1",
-    "langchain-tavily==0.2.12",
-    "langchain[openai]==1.0.2",
+    "langgraph>=1.0.1",
+    "langchain-tavily>=0.2.12",
+    "langchain[openai]>=0.3.0",
+    "langchain-core>=0.3.0",
     "langchain-anthropic>=0.4.0",
     "deepagents>=0.1.0",
-    "python-dotenv==1.1.1",
-    "braintrust==0.3.4",
-    "braintrust-langchain==0.1.1",
-    "rich==14.2.0",
-    "autoevals==0.0.130",
-    "modal==1.2.0",
-    "fastapi[standard]==0.119.1",
+    "python-dotenv>=1.1.1",
+    "braintrust~=0.3.6",
+    "braintrust-langchain>=0.1.1",
+    "rich>=14.2.0",
+    "autoevals>=0.0.130",
+    "modal>=1.2.0",
+    "fastapi[standard]>=0.119.1",
     "ipython>=9.6.0",
 ]
 

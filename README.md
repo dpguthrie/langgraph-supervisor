@@ -171,25 +171,53 @@ You: What is the capital of Japan?
 
 This project includes a comprehensive evaluation framework using **LLM-as-a-Judge** methodology.
 
-### Running Evaluations
+### Running Evaluations Locally
 
 ```bash
-# Run the evaluation suite
+# Run the evaluation suite locally
 braintrust eval evals/
+
+# Or run with dev server (for playground testing)
+braintrust eval evals/eval_simple.py --dev
 ```
+
+### Remote Eval Server on Modal
+
+Deploy the evaluation server to Modal for remote testing from the Braintrust Playground:
+
+```bash
+# Deploy to Modal
+modal deploy src/eval_server.py
+
+# Or test in dev mode first
+modal serve src/eval_server.py
+```
+
+Then connect to it from the Braintrust Playground using your Modal URL. See [`docs/MODAL_EVAL_SERVER.md`](docs/MODAL_EVAL_SERVER.md) for detailed instructions.
 
 ### Evaluation Metrics
 
 - **🎯 Routing Accuracy**: Measures correct agent selection
 - **📝 Response Quality**: Assesses answer accuracy and completeness
-- **⚡ Performance**: Tracks token usage and response times
+- **⚡ Step Efficiency**: Tracks number of steps to completion
+- **🔗 Source Attribution**: Verifies citations and sources
+
+### Configurable Parameters
+
+The evaluation system supports parameterized testing of:
+- System prompts (supervisor, agents)
+- Agent routing descriptions
+- Model selections (gpt-4o-mini, gpt-4o, etc.)
+
+All parameters have sensible defaults defined in `src/config.py`.
 
 ### View Results
 
 Evaluation results are automatically uploaded to your Braintrust dashboard where you can:
 - Track performance over time
-- Compare different model versions
+- Compare different model versions and prompts
 - Analyze detailed evaluation traces
+- Run A/B tests with different configurations
 - Export results for further analysis
 
 ## 📁 Project Structure
@@ -198,13 +226,24 @@ Evaluation results are automatically uploaded to your Braintrust dashboard where
 langgraph-supervisor/
 ├── src/                          # Main application code
 │   ├── app.py                   # Modal web endpoint (exposes `app` and POST /)
+│   ├── eval_server.py           # Modal remote eval server deployment
 │   ├── local_runner.py          # Local CLI runner for interactive use
 │   ├── agent_graph.py           # Agent/supervisor construction and tracing
+│   ├── config.py                # Centralized configuration and defaults
 │   ├── helpers.py               # Utility functions for UI
+│   ├── agents/                  # Agent implementations
+│   │   ├── deep_agent.py        # Supervisor with subagent routing
+│   │   ├── math_agent.py        # Math calculation agent
+│   │   ├── research_agent.py    # Web research agent
+│   │   ├── state.py             # Agent state definitions
+│   │   └── tracing.py           # Braintrust tracing utilities
 │   └── __init__.py
 ├── evals/                       # Evaluation framework
-│   └── eval_simple.py          # LLM-as-a-Judge evaluations
+│   └── eval_simple.py          # LLM-as-a-Judge evaluations with parameters
+├── docs/                        # Documentation
+│   └── MODAL_EVAL_SERVER.md    # Guide for Modal eval server deployment
 ├── requirements.txt             # Python dependencies
+├── pyproject.toml              # Project metadata and dependencies
 ├── .env.example                # Environment variables template
 ├── .gitignore
 ├── scripts/

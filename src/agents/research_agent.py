@@ -4,11 +4,10 @@ from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 from langchain_tavily import TavilySearch
 
+from src.config import DEFAULT_RESEARCH_AGENT_PROMPT
 
-def get_research_agent(
-    system_prompt: str | None = None,
-    model: str = "gpt-4o-mini"
-):
+
+def get_research_agent(system_prompt: str | None = None, model: str = "gpt-4o-mini"):
     """Create research agent with optional custom prompt and model.
 
     Args:
@@ -22,12 +21,8 @@ def get_research_agent(
     - Gathering data from the internet
     """
     # Use provided prompt or fall back to default
-    prompt = system_prompt if system_prompt is not None else (
-        "You are a research agent.\n\n"
-        "INSTRUCTIONS:\n"
-        "- Assist ONLY with research-related tasks, DO NOT do any math\n"
-        "- After you're done with your tasks, respond to the supervisor directly\n"
-        "- Respond ONLY with the results of your work, do NOT include ANY other text."
+    prompt = (
+        system_prompt if system_prompt is not None else DEFAULT_RESEARCH_AGENT_PROMPT
     )
 
     web_search = TavilySearch(max_results=3)

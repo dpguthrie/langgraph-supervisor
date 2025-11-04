@@ -14,7 +14,9 @@ from src.agents.math_agent import get_math_agent
 from src.agents.research_agent import get_research_agent
 from src.agents.state import AgentState
 from src.agents.tracing import ImprovedBraintrustCallbackHandler
-from src.config import AgentConfig
+from src.config import (
+    AgentConfig,
+)
 
 
 class CompiledSubAgent(TypedDict):
@@ -72,25 +74,10 @@ def _get_sub_agents(config: AgentConfig | None = None) -> list[CompiledSubAgent]
     if config is None:
         config = AgentConfig()
 
-    # Use config descriptions or fall back to defaults
-    research_desc = config.research_agent_description or (
-        "Research agent with web search capabilities. "
-        "Use this agent for: web searches, finding information online, "
-        "looking up current events, researching topics, gathering data from the internet, "
-        "answering questions that require external knowledge or real-time information."
-    )
-
-    math_desc = config.math_agent_description or (
-        "Math calculation agent with arithmetic tools. "
-        "Use this agent for: mathematical calculations, arithmetic operations, "
-        "addition, subtraction, multiplication, division, numerical computations, "
-        "solving math problems, performing calculations."
-    )
-
     return [
         CompiledSubAgent(
             name="Research Agent",
-            description=research_desc,
+            description=config.research_agent_description,
             runnable=create_named_subagent_wrapper(
                 "Research Agent",
                 get_research_agent(
@@ -101,7 +88,7 @@ def _get_sub_agents(config: AgentConfig | None = None) -> list[CompiledSubAgent]
         ),
         CompiledSubAgent(
             name="Math Agent",
-            description=math_desc,
+            description=config.math_agent_description,
             runnable=create_named_subagent_wrapper(
                 "Math Agent",
                 get_math_agent(
@@ -111,27 +98,6 @@ def _get_sub_agents(config: AgentConfig | None = None) -> list[CompiledSubAgent]
             ),
         ),
     ]
-
-
-SYSTEM_PROMPT = """
-You are a helpful AI assistant that can delegate tasks to specialized agents when needed.
-
-You have access to the following specialized agents:
-- Research Agent: For web searches and finding information online
-- Math Agent: For mathematical calculations and arithmetic
-
-IMPORTANT INSTRUCTIONS:
-- For simple greetings, small talk, or general conversational responses, respond directly yourself
-- ALWAYS delegate to the Research Agent for:
-  * Factual questions about real-world events, people, places, or statistics
-  * Questions asking "who", "what", "when", "where" about specific facts
-  * Historical records, achievements, or data points
-  * ANY question where accurate, verified information is important
-  * Questions that could benefit from current or verified information
-- ONLY delegate to the Math Agent for queries requiring calculations with specific numbers
-- When delegating, assign work to one agent at a time, do not call agents in parallel
-- When in doubt about whether to research something, USE THE RESEARCH AGENT - it's better to verify facts than to rely on potentially outdated information
-"""
 
 
 def get_deep_agent(config: AgentConfig | None = None):
@@ -170,13 +136,8 @@ def get_deep_agent(config: AgentConfig | None = None):
         ),
     ]
 
-    # Use config system prompt or fall back to default
-    BASE_AGENT_PROMPT = "In order to complete the objective that the user asks of you, you have access to specialized agents."
-    system_prompt = (
-        config.system_prompt
-        if config.system_prompt
-        else (SYSTEM_PROMPT + "\n\n" + BASE_AGENT_PROMPT)
-    )
+    # Use config system prompt
+    system_prompt = config.system_prompt
 
     # Create agent with state schema
     agent = create_agent(

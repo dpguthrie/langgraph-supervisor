@@ -4,7 +4,6 @@ import json
 import os
 import random
 import sys
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Tuple
 
@@ -18,16 +17,44 @@ load_dotenv()
 
 def generate_questions(num_questions: int, seed: Optional[int] = None) -> List[str]:
     """Generate questions using an LLM (OpenAI via LangChain)."""
-    if seed is None:
-        seed = int(time.time())
+    # Use seed for reproducibility or generate random variation
+    rng = random.Random(seed)
+
+    # Define diverse topic pools to randomly sample from
+    topic_pools = [
+        ["mathematics", "physics", "chemistry", "biology", "astronomy"],
+        ["history", "geography", "politics", "economics", "sociology"],
+        ["technology", "artificial intelligence", "robotics", "space exploration"],
+        ["literature", "philosophy", "art", "music", "culture"],
+        ["health", "nutrition", "psychology", "sports", "fitness"],
+        ["business", "finance", "entrepreneurship", "marketing"],
+        ["environment", "climate", "sustainability", "conservation"],
+        ["entertainment", "movies", "games", "pop culture"],
+    ]
+
+    # Randomly select 3-5 topic categories for this run
+    num_categories = rng.randint(3, 5)
+    selected_categories = rng.sample(topic_pools, num_categories)
+    topics = [topic for category in selected_categories for topic in category]
+    rng.shuffle(topics)
+    topics_sample = topics[:8]  # Use 8 topics
+
+    # Add variety with different prompt styles
+    prompt_styles = [
+        f"Generate {num_questions} creative and unexpected questions about: {', '.join(topics_sample)}.",
+        f"Create {num_questions} thought-provoking questions spanning: {', '.join(topics_sample)}.",
+        f"Generate {num_questions} unique questions covering diverse areas like: {', '.join(topics_sample)}.",
+        f"Create {num_questions} interesting questions mixing topics from: {', '.join(topics_sample)}.",
+    ]
+
+    selected_style = rng.choice(prompt_styles)
+
     model = init_chat_model("openai:gpt-4.1", temperature=0.9)
     prompt = (
-        "Generate exactly "
-        f"{num_questions}"
-        " diverse user questions mixing math, research, current events, and general knowledge.\n"
+        f"{selected_style}\n"
+        "Make each question unique and varied in complexity and style.\n"
         "Return ONLY a JSON array of strings, no commentary.\n"
         "Keep each question under 120 characters.\n"
-        f"Seed: {seed}"
     )
     msg = HumanMessage(content=prompt)
     resp = model.invoke([msg])
@@ -112,7 +139,10 @@ def main():
         print("Missing OPENAI_API_KEY in environment", file=sys.stderr)
         sys.exit(2)
 
-    questions = generate_questions(random.randint(1, 100), args.seed)
+    num_questions = random.randint(1, 100)
+    print(f"Generating {num_questions} questions")
+
+    questions = generate_questions(num_questions, args.seed)
 
     successes = 0
     failures = 0

@@ -16,70 +16,24 @@ if str(project_root) not in sys.path:
 from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, init_dataset  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
-from pydantic import BaseModel, Field  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
+
+from evals.parameters import (  # noqa: E402
+    MathAgentPromptParam,
+    MathModelParam,
+    ResearchAgentPromptParam,
+    ResearchModelParam,
+    SupervisorModelParam,
+    SystemPromptParam,
+)
 
 # Import our supervisor system
 from src.agents.deep_agent import get_supervisor  # noqa: E402
-from src.config import AgentConfig  # noqa: E402
+from src.config import (  # noqa: E402
+    AgentConfig,
+)
 
 load_dotenv()
-
-
-# Parameter definitions for remote evals
-class SystemPromptParam(BaseModel):
-    system_prompt: str | None = Field(
-        default=None,
-        description="Custom system prompt for the supervisor agent. If None, uses the default prompt.",
-    )
-
-
-class ResearchAgentPromptParam(BaseModel):
-    research_agent_prompt: str | None = Field(
-        default=None,
-        description="Custom system prompt for the research agent. If None, uses the default prompt.",
-    )
-
-
-class MathAgentPromptParam(BaseModel):
-    math_agent_prompt: str | None = Field(
-        default=None,
-        description="Custom system prompt for the math agent. If None, uses the default prompt.",
-    )
-
-
-class ResearchAgentDescriptionParam(BaseModel):
-    research_agent_description: str | None = Field(
-        default=None,
-        description="Custom routing description for the research agent. Used by the supervisor to decide when to route to this agent.",
-    )
-
-
-class MathAgentDescriptionParam(BaseModel):
-    math_agent_description: str | None = Field(
-        default=None,
-        description="Custom routing description for the math agent. Used by the supervisor to decide when to route to this agent.",
-    )
-
-
-class SupervisorModelParam(BaseModel):
-    supervisor_model: str = Field(
-        default="gpt-4o-mini",
-        description="Model to use for the supervisor agent (e.g., gpt-4o-mini, gpt-4o).",
-    )
-
-
-class ResearchModelParam(BaseModel):
-    research_model: str = Field(
-        default="gpt-4o-mini",
-        description="Model to use for the research agent (e.g., gpt-4o-mini, gpt-4o).",
-    )
-
-
-class MathModelParam(BaseModel):
-    math_model: str = Field(
-        default="gpt-4o-mini",
-        description="Model to use for the math agent (e.g., gpt-4o-mini, gpt-4o).",
-    )
 
 
 def unwrap_parameters(params: dict) -> dict:
@@ -150,7 +104,7 @@ def serialize_message(msg: Any) -> dict:
         return msg if isinstance(msg, dict) else {"content": str(msg)}
 
 
-def run_supervisor_task(input_data: dict, hooks: Any = None) -> dict[str, list]:
+async def run_supervisor_task(input: dict, hooks: Any = None) -> dict[str, list]:
     """Run a single task through the supervisor and return the final response.
 
     Args:
@@ -173,63 +127,21 @@ def run_supervisor_task(input_data: dict, hooks: Any = None) -> dict[str, list]:
         config = AgentConfig(**config_params) if config_params else None
 
         # Get supervisor with config (or default if config is None)
-        supervisor = get_supervisor(config)
+        supervisor = get_supervisor(config, force_rebuild=True)
+        result = await supervisor.ainvoke({"messages": input["messages"]})
+        messages = result.get("messages", []) if isinstance(result, dict) else []
+        for msg in messages:
+            if "tool_calls" in msg and msg["tool_calls"]:
+                for tool_call in msg["tool_calls"]:
+                    if "args" in tool_call and "subagent_type" in tool_call["args"]:
+                        hooks.metadata["agent_used"] = tool_call["args"][
+                            "subagent_type"
+                        ]
+                        break
 
-        # Extract the human message content from the input structure
-        messages = input_data.get("messages", [])
-        if not messages:
-            return {"messages": [{"error": "No messages in input"}]}
-
-        # Get the first human message content
-        first_message = messages[0]
-        user_content = first_message.get("content", "")
-        if not user_content:
-            return {"messages": [{"error": "No content in first message"}]}
-
-        history = [{"role": "user", "content": user_content}]
-
-        # Collect all events and extract routing info
-        all_messages = []
-        agent_used = []
-        tool_calls = []
-
-        for event in supervisor.stream({"messages": history}):
-            # Event structure: {"node_name": {"messages": [...]}}
-            for node_name, node_update in event.items():
-                if "messages" in node_update and node_update["messages"]:
-                    messages = node_update["messages"]
-                    all_messages.extend(messages)
-
-                    # Extract tool calls for routing analysis
-                    for msg in messages:
-                        if hasattr(msg, "tool_calls") and msg.tool_calls:
-                            for tool_call in msg.tool_calls:
-                                tool_calls.append(
-                                    {
-                                        "node": node_name,
-                                        "tool_name": tool_call["name"],
-                                    }
-                                )
-
-                                # Determine which agent was used
-                                if "research_agent" in node_name:
-                                    agent_used.append("research_agent")
-                                elif "math_agent" in node_name:
-                                    agent_used.append("math_agent")
-
-        # Add metadata for evaluation
-        if hooks and hasattr(hooks, "metadata"):
-            hooks.metadata.update(
-                {
-                    "agent_used": agent_used,
-                    "tool_calls": tool_calls,
-                    "total_messages": len(all_messages),
-                }
-            )
+        serialized_messages = [serialize_message(m) for m in messages]
 
         # Serialize messages to JSON-serializable format
-        serialized_messages = [serialize_message(msg) for msg in all_messages]
-
         return {"messages": serialized_messages}
 
     except Exception as e:
@@ -334,8 +246,14 @@ async def source_attribution_scorer(output):
     # Find the last non-empty content message from an AI
     for msg in reversed(messages):
         # Messages are now dicts after serialization
-        content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
-        role = msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "role", "")
+        content = (
+            msg.get("content", "")
+            if isinstance(msg, dict)
+            else getattr(msg, "content", "")
+        )
+        role = (
+            msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "role", "")
+        )
 
         if content and role == "assistant":
             if re.search(r"https?://", content):
@@ -347,6 +265,7 @@ async def source_attribution_scorer(output):
 # Basic evaluation
 Eval(
     "langgraph-supervisor",
+    experiment_name="supervisor-agent",
     data=init_dataset("langgraph-supervisor", "Supervisor Agent Dataset"),
     task=run_supervisor_task,
     scores=[
@@ -360,9 +279,6 @@ Eval(
         "system_prompt": SystemPromptParam,
         "research_agent_prompt": ResearchAgentPromptParam,
         "math_agent_prompt": MathAgentPromptParam,
-        # Routing description parameters
-        "research_agent_description": ResearchAgentDescriptionParam,
-        "math_agent_description": MathAgentDescriptionParam,
         # Model selection parameters
         "supervisor_model": SupervisorModelParam,
         "research_model": ResearchModelParam,

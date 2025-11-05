@@ -24,89 +24,52 @@ from src.agent_graph import get_supervisor  # noqa: E402
 
 
 def generate_questions(num_questions: int, seed: Optional[int] = None) -> List[str]:
-    """Generate a mix of math and research questions to test supervisor routing.
+    """Generate diverse questions mixing math-only, research-only, and hybrid questions.
 
-    The questions are designed to test the supervisor's ability to route to:
-    - MATH_AGENT: arithmetic, calculations, equations
-    - RESEARCH_AGENT: factual questions, current events, history, etc.
+    Questions test the supervisor's ability to:
+    - Route pure math questions to MATH_AGENT
+    - Route pure research questions to RESEARCH_AGENT
+    - Coordinate BOTH agents for hybrid questions (research + math)
     """
     rng = random.Random(seed)
 
-    # Calculate split (roughly 50/50 math vs research, with some variation)
-    num_math = rng.randint(num_questions // 3, 2 * num_questions // 3)
-    num_research = num_questions - num_math
+    # Split: ~1/3 math, ~1/3 research, ~1/3 hybrid
+    num_math = num_questions // 3
+    num_research = num_questions // 3
+    num_hybrid = num_questions - num_math - num_research
 
     print(
-        f"Generating {num_math} math questions and {num_research} research questions..."
+        f"Generating {num_math} math, {num_research} research, "
+        f"and {num_hybrid} hybrid questions..."
     )
 
     model = init_chat_model("openai:gpt-4.1", temperature=0.9)
 
-    # Generate math questions
-    math_prompt = (
-        f"Generate exactly {num_math} diverse mathematical questions.\n"
-        "Include:\n"
-        "- Basic arithmetic (addition, subtraction, multiplication, division)\n"
-        "- Percentages and fractions\n"
-        "- Simple algebra\n"
-        "- Word problems with numbers\n"
-        "- Calculations and conversions\n"
-        "Make each question unique and varied in difficulty.\n"
+    prompt = (
+        f"Generate exactly {num_questions} diverse questions:\n\n"
+        f"1. {num_math} PURE MATH questions (arithmetic, algebra, percentages, calculations)\n"
+        f"2. {num_research} PURE RESEARCH questions (history, geography, current events, facts)\n"
+        f"3. {num_hybrid} HYBRID questions that combine research + math\n\n"
+        "HYBRID examples:\n"
+        "- 'What year was the Eiffel Tower built? Multiply that by 2 and tell me if it's greater than 4000.'\n"
+        "- 'How many states are in the USA? Add 13 to that number.'\n"
+        "- 'What's the population of Tokyo? Is it more than 10 million times 2?'\n\n"
+        "Make questions diverse and interesting.\n"
         "Return ONLY a JSON array of strings, no commentary.\n"
-        "Keep each question under 120 characters.\n"
+        "Keep each question under 150 characters.\n"
     )
-    math_resp = model.invoke([HumanMessage(content=math_prompt)])
-    math_text = getattr(math_resp, "content", "") or ""
-    math_questions = json.loads(math_text)
+    resp = model.invoke([HumanMessage(content=prompt)])
+    text = getattr(resp, "content", "") or ""
+    questions = json.loads(text)
 
-    # Generate research questions
-    research_topics = [
-        "history",
-        "geography",
-        "current events",
-        "science facts",
-        "famous people",
-        "countries and capitals",
-        "animals and nature",
-        "technology companies",
-        "literature",
-        "movies and entertainment",
-    ]
-    selected_topics = rng.sample(research_topics, min(5, len(research_topics)))
+    if not (isinstance(questions, list) and all(isinstance(q, str) for q in questions)):
+        raise RuntimeError("LLM did not return a valid JSON array of strings")
 
-    research_prompt = (
-        f"Generate exactly {num_research} factual research questions about: {', '.join(selected_topics)}.\n"
-        "Questions should:\n"
-        "- Ask 'who', 'what', 'where', 'when' about real-world facts\n"
-        "- Cover current events, history, geography, science\n"
-        "- NOT involve calculations or math\n"
-        "- Require looking up information or knowledge\n"
-        "Make each question unique and interesting.\n"
-        "Return ONLY a JSON array of strings, no commentary.\n"
-        "Keep each question under 120 characters.\n"
-    )
-    research_resp = model.invoke([HumanMessage(content=research_prompt)])
-    research_text = getattr(research_resp, "content", "") or ""
-    research_questions = json.loads(research_text)
+    # Shuffle for variety
+    rng.shuffle(questions)
 
-    # Validate and combine
-    if not (
-        isinstance(math_questions, list)
-        and all(isinstance(q, str) for q in math_questions)
-    ):
-        raise RuntimeError("LLM did not return valid math questions")
-    if not (
-        isinstance(research_questions, list)
-        and all(isinstance(q, str) for q in research_questions)
-    ):
-        raise RuntimeError("LLM did not return valid research questions")
-
-    # Intersperse the questions randomly
-    all_questions = math_questions[:num_math] + research_questions[:num_research]
-    rng.shuffle(all_questions)
-
-    print(f"✓ Generated {len(all_questions)} total questions (shuffled)")
-    return all_questions
+    print(f"✓ Generated {len(questions)} total questions (shuffled)")
+    return questions[:num_questions]
 
 
 async def run_question(supervisor, question: str) -> tuple[str, bool, Optional[dict]]:

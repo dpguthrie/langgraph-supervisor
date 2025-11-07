@@ -37,34 +37,22 @@ load_dotenv()
 
 
 def unwrap_parameters(params: dict) -> dict:
-    """Unwrap Pydantic parameter models to extract actual field values.
+    """Extract parameter values from hooks.parameters.
 
-    Braintrust wraps each parameter in its Pydantic model instance. This function
-    extracts the actual field values from those models.
+    With Braintrust's Parameter class, values come directly without wrapping.
 
     Args:
-        params: Dict of parameter names to Pydantic model instances
+        params: Dict of parameter names to values
 
     Returns:
-        Dict of parameter names to unwrapped field values (filters out None)
+        Dict of parameter names to values (filters out None)
 
     Example:
-        Input:  {"system_prompt": SystemPromptParam(system_prompt="Hello")}
-        Output: {"system_prompt": "Hello"}
+        Input:  {"system_prompt": "Hello", "model": "gpt-4o"}
+        Output: {"system_prompt": "Hello", "model": "gpt-4o"}
     """
-    config_params = {}
-    for key, value in params.items():
-        # Check if this is a Pydantic model instance that needs unwrapping
-        if isinstance(value, BaseModel):
-            # Get the actual field value from the model
-            # The field name matches the key name in our parameter definitions
-            field_value = getattr(value, key, None)
-            if field_value is not None:
-                config_params[key] = field_value
-        elif value is not None:
-            # Direct value (shouldn't happen with our setup, but handle it)
-            config_params[key] = value
-    return config_params
+    # Parameters are already unwrapped when using Parameter class
+    return {key: value for key, value in params.items() if value is not None}
 
 
 def serialize_message(msg: Any) -> dict:
@@ -252,10 +240,10 @@ async def source_attribution_scorer(output):
             else getattr(msg, "content", "")
         )
         role = (
-            msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "role", "")
+            msg.get("type", "") if isinstance(msg, dict) else getattr(msg, "type", "")
         )
 
-        if content and role == "assistant":
+        if content and role == "ai":
             if re.search(r"https?://", content):
                 return 1.0
             break

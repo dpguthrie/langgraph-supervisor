@@ -27,44 +27,55 @@ from src.config import (  # noqa: E402
 load_dotenv()
 
 
-# Parameter definitions for remote evals
 class SystemPromptParam(BaseModel):
-    system_prompt: str = Field(
+    """System prompt parameter for supervisor agent."""
+
+    value: str = Field(
         default=DEFAULT_SYSTEM_PROMPT,
         description="Custom system prompt for the supervisor agent.",
     )
 
 
 class ResearchAgentPromptParam(BaseModel):
-    research_agent_prompt: str = Field(
+    """Research agent prompt parameter."""
+
+    value: str = Field(
         default=DEFAULT_RESEARCH_AGENT_PROMPT,
         description="Custom system prompt for the research agent.",
     )
 
 
 class MathAgentPromptParam(BaseModel):
-    math_agent_prompt: str = Field(
+    """Math agent prompt parameter."""
+
+    value: str = Field(
         default=DEFAULT_MATH_AGENT_PROMPT,
         description="Custom system prompt for the math agent.",
     )
 
 
 class SupervisorModelParam(BaseModel):
-    supervisor_model: str = Field(
+    """Supervisor model selection parameter."""
+
+    value: str = Field(
         default=DEFAULT_SUPERVISOR_MODEL,
         description="Model to use for the supervisor agent (e.g., gpt-4o-mini, gpt-4o).",
     )
 
 
 class ResearchModelParam(BaseModel):
-    research_model: str = Field(
+    """Research model selection parameter."""
+
+    value: str = Field(
         default=DEFAULT_RESEARCH_MODEL,
         description="Model to use for the research agent (e.g., gpt-4o-mini, gpt-4o).",
     )
 
 
 class MathModelParam(BaseModel):
-    math_model: str = Field(
+    """Math model selection parameter."""
+
+    value: str = Field(
         default=DEFAULT_MATH_MODEL,
         description="Model to use for the math agent (e.g., gpt-4o-mini, gpt-4o).",
     )

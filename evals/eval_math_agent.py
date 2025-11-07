@@ -42,13 +42,23 @@ async def run_math_task(input: dict, hooks: Any = None) -> dict:
 
     Args:
         input_data: Dict with 'query' and 'expected_answer' fields
+        hooks: Optional Braintrust hooks for metadata tracking and parameters.
+               When running remotely, hooks.parameters contains the configurable
+               parameters defined in the Eval() constructor.
 
     Returns:
         Dict with 'messages' containing the conversation history
     """
     try:
-        # Get math agent
-        agent = get_math_agent()
+        # Extract parameters if provided (when running remotely)
+        params = hooks.parameters if hooks and hasattr(hooks, "parameters") else {}
+
+        # Get parameter values (they come directly from Braintrust's Parameter class)
+        math_agent_prompt = params.get("math_agent_prompt")
+        math_model = params.get("math_model", "gpt-4o-mini")
+
+        # Get math agent with custom parameters
+        agent = get_math_agent(system_prompt=math_agent_prompt, model=math_model)
 
         # Run the agent
         result = await agent.ainvoke({"messages": input["messages"]})
@@ -219,7 +229,7 @@ calculation_correctness_scorer = LLMClassifier(
 Eval(
     "langgraph-supervisor",
     experiment_name="math-agent",
-    data=MATH_TEST_DATA,
+    data=MATH_TEST_DATA,  # type: ignore
     task=run_math_task,
     scores=[
         calculation_accuracy_scorer,

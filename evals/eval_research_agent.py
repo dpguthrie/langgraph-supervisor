@@ -44,13 +44,25 @@ async def run_research_task(input: dict, hooks: Any = None) -> dict:
 
     Args:
         input_data: Dict with 'query' field containing the research question
+        hooks: Optional Braintrust hooks for metadata tracking and parameters.
+               When running remotely, hooks.parameters contains the configurable
+               parameters defined in the Eval() constructor.
 
     Returns:
         Dict with 'messages' containing the conversation history
     """
     try:
-        # Get research agent
-        agent = get_research_agent()
+        # Extract parameters if provided (when running remotely)
+        params = hooks.parameters if hooks and hasattr(hooks, "parameters") else {}
+
+        # Get parameter values (they come directly from Braintrust's Parameter class)
+        research_agent_prompt = params.get("research_agent_prompt")
+        research_model = params.get("research_model", "gpt-4o-mini")
+
+        # Get research agent with custom parameters
+        agent = get_research_agent(
+            system_prompt=research_agent_prompt, model=research_model
+        )
 
         # Run the agent
         result = await agent.ainvoke({"messages": input["messages"]})
@@ -190,7 +202,7 @@ answer_quality_scorer = LLMClassifier(
 Eval(
     "langgraph-supervisor",
     experiment_name="research-agent",
-    data=RESEARCH_TEST_DATA,
+    data=RESEARCH_TEST_DATA,  # type: ignore
     task=run_research_task,
     scores=[
         web_search_usage_scorer,

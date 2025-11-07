@@ -1,67 +1,83 @@
-import modal  # type: ignore
-from fastapi import Request  # type: ignore
-from langchain_core.messages import BaseMessage, HumanMessage
+"""Modal deployment for Braintrust remote eval dev server.
 
-from src.agent_graph import get_supervisor
+This is a simplified version that uses Braintrust's built-in create_app()
+function instead of manually recreating all the middleware and routing logic.
+"""
 
+import modal
 
+# Create image with all dependencies
 modal_image = (
     modal.Image.debian_slim()
-    .uv_sync()
+    .apt_install(
+        "git"
+    )  # Git is required for installing braintrust from git branch (temporary remote evals fix)
+    .uv_sync()  # Install dependencies from pyproject.toml/requirements.txt
     .add_local_python_source("src")
+    .add_local_python_source("evals")
 )
-app = modal.App("langgraph-supervisor-web", image=modal_image)
+
+app = modal.App("langgraph-supervisor-eval-server", image=modal_image)
 
 # Always read secrets from local .env and send them as a Secret
 _secrets = [modal.Secret.from_dotenv()]
 
 
-def _normalize_content(content):
-    if isinstance(content, list):
-        parts = []
-        for part in content:
-            if isinstance(part, dict):
-                parts.append(str(part.get("text", "")))
-            else:
-                parts.append(str(part))
-        return " ".join(p for p in parts if p)
-    return content
-
-
-def _serialize_message(message: BaseMessage):
-    role = getattr(message, "type", message.__class__.__name__.lower())
-    return {"role": role, "content": _normalize_content(message.content)}
-
-
-@app.function(secrets=_secrets)
-@modal.fastapi_endpoint(method="POST", requires_proxy_auth=True)
-async def chat(
-    _request: Request,
-    payload: dict,
-):
-    """HTTP endpoint: {"message": "..."} -> run supervisor and return messages.
-
-    Returns a JSON-serializable transcript of messages.
+@app.function(
+    secrets=_secrets,
+    # Keep the server warm with at least 1 instance
+    min_containers=1,
+    # Timeout for long-running evals
+    timeout=3600,
+)
+@modal.concurrent(max_inputs=10)
+@modal.asgi_app()
+def braintrust_eval_server():
     """
+    Run Braintrust remote eval dev server on Modal.
 
-    user_text = (payload or {}).get("q")
-    if not user_text or not str(user_text).strip():
-        return {"error": "Missing 'q' in request body"}
+    This uses Braintrust's built-in create_app() function which handles
+    all the routing, middleware, and ASGI app setup automatically.
+    """
+    from pathlib import Path
 
-    try:
-        # Initialize supervisor inside the function so Modal secrets are available
-        supervisor = get_supervisor()
+    from braintrust.cli.eval import EvaluatorState, FileHandle, update_evaluators
+    from braintrust.devserver.server import create_app
 
-        result = await supervisor.ainvoke(
-            {"messages": [HumanMessage(content=str(user_text))]}
-        )
-        messages = result.get("messages", []) if isinstance(result, dict) else []
-        serialized = [
-            _serialize_message(m) for m in messages if isinstance(m, BaseMessage)
-        ]
-        # Fallback: if nothing serialized, return string form
-        if not serialized and isinstance(result, dict):
-            return {"result": {k: str(v) for k, v in result.items()}}
-        return {"messages": serialized}
-    except Exception as e:
-        return {"error": str(e)}
+    import evals
+
+    # Find all eval files in the evals directory
+    # In Modal, the evals package is mounted and importable
+    if hasattr(evals, "__path__") and evals.__path__:
+        evals_dir = Path(evals.__path__[0])
+    elif hasattr(evals, "__file__") and evals.__file__:
+        evals_dir = Path(evals.__file__).parent
+    else:
+        raise RuntimeError("Could not locate evals package directory")
+
+    print(f"Scanning for evaluators in {evals_dir}")
+
+    # Find all eval_*.py files (matching braintrust CLI pattern)
+    eval_files = list(evals_dir.glob("eval_*.py"))
+    print(f"Found {len(eval_files)} eval file(s): {[f.name for f in eval_files]}")
+
+    # Load evaluators using Braintrust's CLI loader
+    handles = [FileHandle(in_file=str(eval_file)) for eval_file in eval_files]
+    eval_state = EvaluatorState()
+    update_evaluators(eval_state, handles, terminate_on_failure=True)
+    evaluators = [e.evaluator for e in eval_state.evaluators]
+
+    print(f"Loaded {len(evaluators)} evaluator(s): {[e.eval_name for e in evaluators]}")
+
+    # Use Braintrust's built-in create_app which handles all the setup
+    # This creates a Starlette ASGI app with routes, middleware, etc.
+    return create_app(evaluators, org_name=None)
+
+
+# Optional: Add a local entrypoint for testing
+@app.local_entrypoint()
+def test():
+    """Test the deployment locally."""
+    print("Testing Braintrust eval server deployment...")
+    print("Deploy with: modal deploy src/eval_server_simple.py")
+    print("After deployment, you can connect to it from the Braintrust Playground")

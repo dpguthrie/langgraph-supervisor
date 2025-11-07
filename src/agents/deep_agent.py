@@ -3,17 +3,14 @@
 import os
 from typing import Any, TypedDict
 
-from braintrust import init_logger
-from braintrust_langchain import set_global_handler
 from deepagents.middleware.subagents import SubAgentMiddleware
 from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
-from langchain_core.runnables import Runnable, RunnableConfig, RunnableLambda
+from langchain_core.runnables import Runnable
 
 from src.agents.math_agent import get_math_agent
 from src.agents.research_agent import get_research_agent
 from src.agents.state import AgentState
-from src.agents.tracing import ImprovedBraintrustCallbackHandler
 from src.config import (
     AgentConfig,
 )
@@ -25,40 +22,6 @@ class CompiledSubAgent(TypedDict):
     name: str
     description: str
     runnable: Runnable
-
-
-def create_named_subagent_wrapper(subagent_name: str, subagent: Runnable) -> Runnable:
-    """Wrap a subagent to add proper run_name for better Braintrust tracing.
-
-    This adds a run_name and tags to the subagent invocation config, which helps
-    Braintrust identify the specific subagent in traces instead of showing generic
-    'tools' spans.
-
-    Args:
-        subagent_name: Name of the subagent (e.g., "Research Agent")
-        subagent: The compiled subagent runnable
-
-    Returns:
-        Wrapped runnable with metadata injection
-    """
-
-    def invoke_with_name(
-        state: dict[str, Any], config: RunnableConfig | None = None
-    ) -> dict[str, Any]:
-        config = config or {}
-        config["run_name"] = subagent_name  # type: ignore
-        config["tags"] = config.get("tags", []) + [f"subagent:{subagent_name}"]  # type: ignore
-        return subagent.invoke(state, config)
-
-    async def ainvoke_with_name(
-        state: dict[str, Any], config: RunnableConfig | None = None
-    ) -> dict[str, Any]:
-        config = config or {}
-        config["run_name"] = subagent_name  # type: ignore
-        config["tags"] = config.get("tags", []) + [f"subagent:{subagent_name}"]  # type: ignore
-        return await subagent.ainvoke(state, config)
-
-    return RunnableLambda(invoke_with_name, ainvoke_with_name)
 
 
 def _get_sub_agents(config: AgentConfig | None = None) -> list[CompiledSubAgent]:
@@ -78,23 +41,17 @@ def _get_sub_agents(config: AgentConfig | None = None) -> list[CompiledSubAgent]
         CompiledSubAgent(
             name="Research Agent",
             description=config.research_agent_description,
-            runnable=create_named_subagent_wrapper(
-                "Research Agent",
-                get_research_agent(
-                    system_prompt=config.research_agent_prompt,
-                    model=config.research_model,
-                ),
+            runnable=get_research_agent(
+                system_prompt=config.research_agent_prompt,
+                model=config.research_model,
             ),
         ),
         CompiledSubAgent(
             name="Math Agent",
             description=config.math_agent_description,
-            runnable=create_named_subagent_wrapper(
-                "Math Agent",
-                get_math_agent(
-                    system_prompt=config.math_agent_prompt,
-                    model=config.math_model,
-                ),
+            runnable=get_math_agent(
+                system_prompt=config.math_agent_prompt,
+                model=config.math_model,
             ),
         ),
     ]
@@ -146,13 +103,10 @@ def get_deep_agent(config: AgentConfig | None = None):
         tools=None,
         middleware=deepagent_middleware,
         state_schema=AgentState,
-    ).with_config({"recursion_limit": 1000})
-
-    # Initialize tracing - set global handler once
-    logger = init_logger(
-        project="langgraph-supervisor", api_key=os.environ.get("BRAINTRUST_API_KEY")
-    )
-    set_global_handler(ImprovedBraintrustCallbackHandler(logger=logger))
+    ).with_config({
+        "recursion_limit": 25,
+        "run_name": "Supervisor Agent"
+    })
 
     return agent
 

@@ -43,4 +43,5 @@ jobs:
           api_key: ${{ secrets.BRAINTRUST_API_KEY }}
           runtime: python
           package_manager: uv
-          root: evals/eval_supervisor.py
+          root: evals
+          paths: eval_supervisor.py

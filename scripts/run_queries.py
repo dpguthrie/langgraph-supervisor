@@ -12,15 +12,16 @@ from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model  # type: ignore
 from langchain_core.messages import HumanMessage  # type: ignore
 
+from braintrust import init_logger
+from braintrust_langchain import set_global_handler, BraintrustCallbackHandler
+
+
 # Add project root to path
 project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 load_dotenv()
-
-# Import supervisor after setting up path
-from src.agent_graph import get_supervisor  # noqa: E402
 
 
 def generate_questions(num_questions: int, seed: Optional[int] = None) -> List[str]:
@@ -104,6 +105,9 @@ async def main_async(args):
         print("Missing OPENAI_API_KEY in environment", file=sys.stderr)
         sys.exit(2)
 
+    # Import supervisor after setting up path
+    from src.agent_graph import get_supervisor  # noqa: E402
+
     num_questions = random.randint(1, 100)
     print(f"Generating {num_questions} questions...\n")
 
@@ -151,7 +155,7 @@ async def main_async(args):
         sys.exit(1)
 
 
-def main():
+def main(logger=None):
     parser = argparse.ArgumentParser(
         description="Generate N questions and run through supervisor locally"
     )
@@ -171,8 +175,21 @@ def main():
     )
     args = parser.parse_args()
 
+    # Initialize tracing - set global handler BEFORE creating agents
+    if logger is None:
+        logger = init_logger(
+            project="langgraph-supervisor", api_key=os.environ.get("BRAINTRUST_API_KEY")
+        )
+    set_global_handler(BraintrustCallbackHandler(logger=logger))
+
     # Run async main
-    asyncio.run(main_async(args))
+    try:
+        asyncio.run(main_async(args))
+    finally:
+        # Flush logger to ensure traces are sent to Braintrust
+        print("\nFlushing traces to Braintrust...")
+        logger.flush()
+        print("✅ Traces sent!")
 
 
 if __name__ == "__main__":

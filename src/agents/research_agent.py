@@ -31,4 +31,5 @@ def get_research_agent(system_prompt: str | None = None, model: str = "gpt-4o-mi
         model=init_chat_model(f"openai:{model}"),
         tools=[web_search],
         system_prompt=prompt,
+        name="Research Agent",
     )

@@ -41,4 +41,5 @@ def get_math_agent(system_prompt: str | None = None, model: str = "gpt-4o-mini")
         model=init_chat_model(f"openai:{model}"),
         tools=tools,
         system_prompt=prompt,
+        name="Math Agent",
     )

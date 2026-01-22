@@ -14,7 +14,8 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from autoevals import LLMClassifier  # noqa: E402
-from braintrust import Eval, init_dataset, init_logger, wrap_openai  # noqa: E402
+from braintrust import Eval, init_dataset, init_logger  # noqa: E402
+from braintrust.oai import wrap_openai  # noqa: E402
 from braintrust_langchain import (  # noqa: E402
     BraintrustCallbackHandler,
     set_global_handler,
@@ -148,11 +149,6 @@ async def run_supervisor_task(input: dict, hooks: Any = None) -> dict[str, list]
         Dict containing messages from the supervisor execution
     """
     try:
-        # Initialize metadata with default value for agent_used
-        # This will be overridden if the supervisor routes to a subagent
-        if hooks and hasattr(hooks, "metadata"):
-            hooks.metadata["agent_used"] = "supervisor_direct"
-
         # Build AgentConfig from parameters (if provided)
         # When running locally: hooks is None, params is empty dict
         # When running remotely: hooks.parameters contains the config values
@@ -165,20 +161,10 @@ async def run_supervisor_task(input: dict, hooks: Any = None) -> dict[str, list]
 
         # Invoke - the global handler will capture all LLM/tool calls
         result = await supervisor.ainvoke({"messages": input["messages"]})
-
         messages = result.get("messages", []) if isinstance(result, dict) else []
-        for msg in messages:
-            if hasattr(msg, "tool_calls") and msg.tool_calls:
-                for tool_call in msg.tool_calls:
-                    if "args" in tool_call and "subagent_type" in tool_call["args"]:
-                        hooks.metadata["agent_used"] = tool_call["args"][
-                            "subagent_type"
-                        ]
-                        break
-
-        serialized_messages = [serialize_message(m) for m in messages]
 
         # Serialize messages to JSON-serializable format
+        serialized_messages = [serialize_message(m) for m in messages]
         return {"messages": serialized_messages}
 
     except Exception as e:

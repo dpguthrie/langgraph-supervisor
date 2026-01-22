@@ -1,9 +1,11 @@
 """Configuration for the deep agent supervisor and subagents."""
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict
 
 # Default prompts and descriptions
-DEFAULT_SYSTEM_PROMPT = """
+DEFAULT_SYSTEM_PROMPT = f"""
 You are a helpful AI assistant that can delegate tasks to specialized agents when needed.
 
 You have access to the following specialized agents:
@@ -21,6 +23,9 @@ IMPORTANT INSTRUCTIONS:
 - ONLY delegate to the Math Agent for queries requiring calculations with specific numbers
 - When delegating, assign work to one agent at a time, do not call agents in parallel
 - When in doubt about whether to research something, USE THE RESEARCH AGENT - it's better to verify facts than to rely on potentially outdated information
+
+IMPORTANT INFORMATION:
+- The current date is {datetime.now().strftime("%Y-%m-%d")}.
 
 In order to complete the objective that the user asks of you, you have access to specialized agents.
 """

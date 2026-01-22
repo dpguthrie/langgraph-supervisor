@@ -1,6 +1,7 @@
 import getpass
 import os
 
+from braintrust_langchain import BraintrustCallbackHandler
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from rich.console import Console
@@ -26,7 +27,18 @@ def main():
     console = Console()
 
     # Import after environment is set so agent initialization has keys available
+    import braintrust
+
     from src.agent_graph import get_supervisor
+
+    # Initialize Braintrust logging for the session
+    logger = braintrust.start_logger(
+        project="langgraph-supervisor",
+        experiment="local-dev",
+    )
+
+    # Create callback handler for tracing
+    callback = BraintrustCallbackHandler(logger=logger)
 
     supervisor = get_supervisor()
 
@@ -45,6 +57,7 @@ def main():
 
             if user_input.lower() in {"q", "quit", "exit"}:
                 console.print("\n[bold yellow]👋 Goodbye![/bold yellow]")
+                logger.flush()
                 break
 
             if not user_input.strip():
@@ -58,11 +71,17 @@ def main():
 
             # Capture the final state to update history with assistant responses
             final_state = None
-            for event in supervisor.stream({"messages": history}):
+            for event in supervisor.stream(
+                {"messages": history}, config={"callbacks": [callback]}
+            ):
                 pretty_print_messages(event)
                 # Track the latest state
                 for _, node_update in event.items():
-                    if node_update and isinstance(node_update, dict) and "messages" in node_update:
+                    if (
+                        node_update
+                        and isinstance(node_update, dict)
+                        and "messages" in node_update
+                    ):
                         final_state = node_update
 
             # Update history with all messages from the final state
@@ -71,9 +90,11 @@ def main():
 
         except KeyboardInterrupt:
             console.print("\n[bold yellow]👋 Goodbye![/bold yellow]")
+            logger.flush()
             break
         except Exception as e:
             console.print(f"[bold red]Error: {e}[/bold red]")
+            logger.flush()
 
 
 if __name__ == "__main__":

@@ -9,6 +9,9 @@ import modal
 # Create image with all dependencies
 modal_image = (
     modal.Image.debian_slim()
+    .apt_install(
+        "git"
+    )  # Git is required for installing braintrust from git branch (temporary remote evals fix)
     .uv_sync()  # Install dependencies from pyproject.toml/requirements.txt
     .add_local_python_source("src")
     .add_local_python_source("evals")
@@ -38,6 +41,13 @@ def braintrust_eval_server():
     """
     from pathlib import Path
 
+    # IMPORTANT: Apply the SDK patch BEFORE any Braintrust imports
+    # This ensures the patched version is used when evaluators are loaded
+    from evals.braintrust_parameter_patch import apply_parameter_patch
+
+    apply_parameter_patch()
+
+    # Now import Braintrust components (they will use the patched version)
     from braintrust.cli.eval import EvaluatorState, FileHandle, update_evaluators
     from braintrust.devserver.server import create_app
 

@@ -39,7 +39,7 @@ def _get_sub_agents(config: AgentConfig | None = None) -> list[CompiledSubAgent]
 
     return [
         CompiledSubAgent(
-            name="Research Agent",
+            name="ResearchAgent",
             description=config.research_agent_description,
             runnable=get_research_agent(
                 system_prompt=config.research_agent_prompt,
@@ -47,7 +47,7 @@ def _get_sub_agents(config: AgentConfig | None = None) -> list[CompiledSubAgent]
             ),
         ),
         CompiledSubAgent(
-            name="Math Agent",
+            name="MathAgent",
             description=config.math_agent_description,
             runnable=get_math_agent(
                 system_prompt=config.math_agent_prompt,

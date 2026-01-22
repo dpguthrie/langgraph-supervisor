@@ -3,10 +3,10 @@ Simple evaluation script for the Agent Assistant.
 Run this file to execute basic evaluations.
 """
 
-import re
+import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 # Ensure project root is on sys.path so `src` package can be imported
 project_root = Path(__file__).resolve().parents[1]
@@ -14,10 +14,16 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from autoevals import LLMClassifier  # noqa: E402
-from braintrust import Eval, init_dataset  # noqa: E402
+from braintrust import Eval, init_dataset, init_logger, wrap_openai  # noqa: E402
+from braintrust_langchain import (  # noqa: E402
+    BraintrustCallbackHandler,
+    set_global_handler,
+)
 from dotenv import load_dotenv  # noqa: E402
+from openai import OpenAI  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
+from evals.braintrust_parameter_patch import apply_parameter_patch  # noqa: E402
 from evals.parameters import (  # noqa: E402
     MathAgentPromptParam,
     MathModelParam,
@@ -35,24 +41,61 @@ from src.config import (  # noqa: E402
 
 load_dotenv()
 
+# Apply the parameter patch for both local dev server and remote Modal deployment
+# This fixes the Braintrust SDK's missing default value extraction for Pydantic parameters
+apply_parameter_patch()
+
+
+client = wrap_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
+
 
 def unwrap_parameters(params: dict) -> dict:
     """Extract parameter values from hooks.parameters.
 
-    With Braintrust's Parameter class, values come directly without wrapping.
+    Braintrust parameters can be either:
+    - Parameter model instances (single-field Pydantic models) - extract 'value' field
+    - Parameter classes (when running locally) - instantiate then extract 'value'
+    - Plain values (fallback) - use directly
 
     Args:
-        params: Dict of parameter names to values
+        params: Dict of parameter names to Parameter classes/instances/values
 
     Returns:
-        Dict of parameter names to values (filters out None)
+        Dict of parameter names to actual values (filters out None)
 
     Example:
-        Input:  {"system_prompt": "Hello", "model": "gpt-4o"}
-        Output: {"system_prompt": "Hello", "model": "gpt-4o"}
+        Input:  {"system_prompt": SystemPromptParam(value="Hello"), "other": "value"}
+        Output: {"system_prompt": "Hello", "other": "value"}
     """
-    # Parameters are already unwrapped when using Parameter class
-    return {key: value for key, value in params.items() if value is not None}
+    import inspect
+
+    from pydantic import BaseModel
+
+    result = {}
+    for key, param in params.items():
+        if param is None:
+            continue
+
+        # If it's a Pydantic model class (not an instance), instantiate it with defaults
+        if inspect.isclass(param) and issubclass(param, BaseModel):
+            param_instance = param()  # Instantiate with default values
+            # Extract the 'value' field (single-field model pattern)
+            if hasattr(param_instance, "value"):
+                result[key] = param_instance.value  # type: ignore
+            else:
+                # Fallback: use the whole instance
+                result[key] = param_instance
+        # If it's already a Pydantic model instance, extract the 'value' field
+        elif isinstance(param, BaseModel):
+            if hasattr(param, "value"):
+                result[key] = param.value  # type: ignore
+            else:
+                # Fallback: use the whole instance
+                result[key] = param
+        # Otherwise use the param directly (fallback for plain values)
+        else:
+            result[key] = param
+    return result
 
 
 def serialize_message(msg: Any) -> dict:
@@ -105,22 +148,28 @@ async def run_supervisor_task(input: dict, hooks: Any = None) -> dict[str, list]
         Dict containing messages from the supervisor execution
     """
     try:
+        # Initialize metadata with default value for agent_used
+        # This will be overridden if the supervisor routes to a subagent
+        if hooks and hasattr(hooks, "metadata"):
+            hooks.metadata["agent_used"] = "supervisor_direct"
+
         # Build AgentConfig from parameters (if provided)
         # When running locally: hooks is None, params is empty dict
         # When running remotely: hooks.parameters contains the config values
         params = hooks.parameters if hooks and hasattr(hooks, "parameters") else {}
 
-        # Unwrap Pydantic parameter models to extract actual field values
         config_params = unwrap_parameters(params)
         config = AgentConfig(**config_params) if config_params else None
 
-        # Get supervisor with config (or default if config is None)
         supervisor = get_supervisor(config, force_rebuild=True)
+
+        # Invoke - the global handler will capture all LLM/tool calls
         result = await supervisor.ainvoke({"messages": input["messages"]})
+
         messages = result.get("messages", []) if isinstance(result, dict) else []
         for msg in messages:
-            if "tool_calls" in msg and msg["tool_calls"]:
-                for tool_call in msg["tool_calls"]:
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                for tool_call in msg.tool_calls:
                     if "args" in tool_call and "subagent_type" in tool_call["args"]:
                         hooks.metadata["agent_used"] = tool_call["args"][
                             "subagent_type"
@@ -140,33 +189,121 @@ async def run_supervisor_task(input: dict, hooks: Any = None) -> dict[str, list]
 
 # LLM-as-a-Judge Scoring functions
 
-# Routing Accuracy LLM Judge
-routing_accuracy_prompt = """
-You are an expert evaluator of AI agent routing systems. Your task is to determine whether a user question was correctly routed to the appropriate agent.
+## Routing Accuracy - Trace Scorer
 
-The system has two agents:
-1. MATH_AGENT: Should handle mathematical calculations, arithmetic, equations, and numerical problems
-2. RESEARCH_AGENT: Should handle factual questions, information lookup, current events, geography, history, etc.
 
-Question: {{input}}
-Agent Used: {{metadata.agent_used}}
+class RoutingAccuracyOutput(BaseModel):
+    """Structured output for routing accuracy evaluation."""
 
-Evaluate whether the question was routed to the correct agent. Consider:
-- Math questions (calculations, arithmetic, "what is X + Y") should go to MATH_AGENT
-- Factual/research questions (who, what, where, when questions about real-world information) should go to RESEARCH_AGENT
+    choice: Literal["A", "B", "C", "D"]
+    reasoning: str
 
-Respond with:
-CORRECT - if the routing was appropriate
-INCORRECT - if the routing was wrong
+
+ROUTING_ACCURACY_PROMPT = """
+You are an expert evaluator of AI agent routing systems. Your task is to determine whether a user question was correctly routed to the appropriate agents.
+
+The system has the following specialized agents:
+1. **MathAgent**: Should handle mathematical calculations, arithmetic, equations, numerical problems, and any query requiring computation with specific numbers.
+2. **ResearchAgent**: Should handle factual questions, information lookup, current events, geography, history, statistics, and any query requiring external knowledge or web search.
+
+The supervisor can:
+- Route to a single agent
+- Route to multiple agents (if the query requires both research and math)
+- Answer directly without routing (for simple greetings, conversational queries, or ambiguous questions)
+
+**User Question**: {input}
+
+**Agents Called**: {agents_called}
+
+**Evaluation Criteria**:
+
+Math queries (e.g., "What is 25 * 4?", "Calculate 100 + 50"):
+- SHOULD route to MathAgent only
+- Should NOT route to ResearchAgent unless additional context/research is needed
+
+Research queries (e.g., "Who is the president?", "What is the capital of France?"):
+- SHOULD route to ResearchAgent only
+- Should NOT route to MathAgent unless calculation is involved
+
+Hybrid queries (e.g., "What year was the Eiffel Tower built? Multiply that by 2."):
+- SHOULD route to BOTH ResearchAgent (for the fact) AND MathAgent (for the calculation)
+- Order may vary
+
+Simple conversational queries (e.g., "hello", "help me understand this"):
+- CAN be answered directly by supervisor (no routing)
+- Routing is acceptable but not required
+
+**Task**: Evaluate the routing decision and respond with your reasoning, then select ONE of these options:
+
+(A) CORRECT - All routing decisions were appropriate. This includes:
+    - Correct agent(s) called for the query type
+    - No routing when direct answer is appropriate (simple greetings, chat)
+    - Multiple agents called when query requires both research and calculation
+
+(B) MOSTLY_CORRECT - Routing was generally correct but with minor issues:
+    - Correct agents called but could have answered directly
+    - Correct primary agent but missed a secondary agent for optimal answer
+
+(C) PARTIALLY_WRONG - Significant routing issues:
+    - Wrong agent called but got lucky with the answer
+    - Correct agent plus unnecessary additional agent(s)
+    - Missing critical agent for the query type
+
+(D) INCORRECT - Routing was wrong:
+    - Wrong agent(s) called for the query type
+    - No routing when specialized agent was clearly needed
+    - Multiple wrong agents called
 """
 
-routing_accuracy_scorer = LLMClassifier(
-    name="Routing Accuracy",
-    prompt_template=routing_accuracy_prompt,
-    choice_scores={"CORRECT": 1, "INCORRECT": 0},
-    use_cot=True,
-    model="gpt-4o",
-)
+
+async def routing_accuracy_scorer(input, output, expected, metadata, trace):
+    choice_map = {
+        "A": 1.0,
+        "B": 0.7,
+        "C": 0.3,
+        "D": 0.0,
+    }
+    spans = await trace.get_spans(span_type=["task"])
+    agents_called_str = "None (supervisor answered directly)"
+    agents_called = []
+    for span in spans:
+        span_name = span.span_attributes.get("name", None)
+        if span_name in ["MathAgent", "ResearchAgent"]:
+            agents_called.append(span_name)
+
+    if agents_called:
+        agents_called_str = ", ".join(agents_called)
+
+    prompt = ROUTING_ACCURACY_PROMPT.format(
+        input=input, agents_called=agents_called_str
+    )
+    response = client.responses.parse(
+        model="gpt-4o-mini",
+        input=[{"role": "user", "content": prompt}],
+        text_format=RoutingAccuracyOutput,
+    )
+    output = response.output_parsed
+    if output is None:
+        return {
+            "name": "Routing Accuracy",
+            "score": 0.0,
+            "metadata": {
+                "agents_called": agents_called_str,
+                "reasoning": "No output",
+                "choice": "D",
+            },
+        }
+
+    return {
+        "name": "Routing Accuracy",
+        "score": choice_map.get(output.choice, 0.0),
+        "metadata": {
+            "agents_called": agents_called_str,
+            "reasoning": output.reasoning,
+            "choice": output.choice,
+        },
+    }
+
 
 # Response Quality LLM Judge
 response_quality_prompt = """
@@ -221,46 +358,21 @@ async def step_efficiency_scorer(output):
     return max(0.0, 1.0 - (num_steps - MAX_STEPS) / MAX_STEPS)
 
 
-class SourceAttributionScorer(BaseModel):
-    output: list[dict]
-
-
-async def source_attribution_scorer(output):
-    """
-    Checks if the final answer includes a credible source (URL).
-    Returns 1.0 if a URL is present, else 0.0.
-    """
-    messages = output.get("messages", [])
-    # Find the last non-empty content message from an AI
-    for msg in reversed(messages):
-        # Messages are now dicts after serialization
-        content = (
-            msg.get("content", "")
-            if isinstance(msg, dict)
-            else getattr(msg, "content", "")
-        )
-        role = (
-            msg.get("type", "") if isinstance(msg, dict) else getattr(msg, "type", "")
-        )
-
-        if content and role == "ai":
-            if re.search(r"https?://", content):
-                return 1.0
-            break
-    return 0.0
-
+logger = init_logger(
+    project="langgraph-supervisor",
+    api_key=os.environ.get("BRAINTRUST_API_KEY"),
+)
+set_global_handler(BraintrustCallbackHandler(logger=logger))
 
 # Basic evaluation
 Eval(
     "langgraph-supervisor",
-    experiment_name="supervisor-agent",
     data=init_dataset("langgraph-supervisor", "Supervisor Agent Dataset"),
     task=run_supervisor_task,
     scores=[
         response_quality_scorer,
         routing_accuracy_scorer,
         step_efficiency_scorer,
-        source_attribution_scorer,
     ],  # type: ignore
     parameters={
         # Prompt parameters

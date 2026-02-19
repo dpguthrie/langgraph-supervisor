@@ -39,6 +39,10 @@ jobs:
 
       - name: Run Evals
         uses: braintrustdata/eval-action@v1
+        env:
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           api_key: ${{ secrets.BRAINTRUST_API_KEY }}
           runtime: python

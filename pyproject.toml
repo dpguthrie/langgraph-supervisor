@@ -42,6 +42,7 @@ dependencies = [
     "rich>=14.2.0",
     "autoevals<0.1.0",
     "modal>=1.2.0",
+    "gunicorn>=22.0.0",
     "fastapi[standard]>=0.119.1",
     "ipython>=9.6.0",
 ]

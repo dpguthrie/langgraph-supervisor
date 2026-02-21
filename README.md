@@ -193,7 +193,28 @@ modal deploy src/eval_server.py
 modal serve src/eval_server.py
 ```
 
-Then connect to it from the Braintrust Playground using your Modal URL. See [`docs/MODAL_EVAL_SERVER.md`](docs/MODAL_EVAL_SERVER.md) for detailed instructions.
+Then connect to it from the Braintrust Playground using your Modal URL.
+
+### Remote Eval Server on Azure App Service
+
+Alternatively, deploy as a Docker container on Azure App Service:
+
+```bash
+# Build the Docker image
+docker build -t langgraph-eval-server .
+
+# Run locally to test
+docker run --rm -p 8000:8000 \
+  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+  -e TAVILY_API_KEY="$TAVILY_API_KEY" \
+  -e BRAINTRUST_API_KEY="$BRAINTRUST_API_KEY" \
+  langgraph-eval-server
+
+# Verify
+curl http://localhost:8000/list
+```
+
+See [`docs/AZURE_EVAL_SERVER.md`](docs/AZURE_EVAL_SERVER.md) for full Azure deployment instructions.
 
 ### Evaluation Metrics
 
@@ -239,9 +260,13 @@ langgraph-supervisor/
 │   │   └── tracing.py           # Braintrust tracing utilities
 │   └── __init__.py
 ├── evals/                       # Evaluation framework
+│   ├── __init__.py              # Package init
 │   └── eval_simple.py          # LLM-as-a-Judge evaluations with parameters
+├── azure_app.py                 # Azure/Docker ASGI entry point for eval server
+├── Dockerfile                   # Docker build for Azure App Service deployment
+├── docker-entrypoint.sh         # Gunicorn startup script
 ├── docs/                        # Documentation
-│   └── MODAL_EVAL_SERVER.md    # Guide for Modal eval server deployment
+│   └── AZURE_EVAL_SERVER.md    # Guide for Azure eval server deployment
 ├── requirements.txt             # Python dependencies
 ├── pyproject.toml              # Project metadata and dependencies
 ├── .env.example                # Environment variables template

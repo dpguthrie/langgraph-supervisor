@@ -14,12 +14,9 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from autoevals import LLMClassifier  # noqa: E402
-from braintrust import Eval, init_dataset, init_logger  # noqa: E402
+from braintrust import Eval, init_dataset  # noqa: E402
 from braintrust.oai import wrap_openai  # noqa: E402
-from braintrust_langchain import (  # noqa: E402
-    BraintrustCallbackHandler,
-    set_global_handler,
-)
+from braintrust_langchain import BraintrustCallbackHandler  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 from openai import OpenAI  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
@@ -159,8 +156,13 @@ async def run_supervisor_task(input: dict, hooks: Any = None) -> dict[str, list]
 
         supervisor = get_supervisor(config, force_rebuild=True)
 
-        # Invoke - the global handler will capture all LLM/tool calls
-        result = await supervisor.ainvoke({"messages": input["messages"]})
+        # Use hooks.span as the parent so LangChain spans nest under the eval trace
+        span = hooks.span if hooks and hasattr(hooks, "span") and hooks.span else None
+        callback = BraintrustCallbackHandler(logger=span)
+        result = await supervisor.ainvoke(
+            {"messages": input["messages"]},
+            config={"callbacks": [callback]},
+        )
         messages = result.get("messages", []) if isinstance(result, dict) else []
 
         # Serialize messages to JSON-serializable format
@@ -343,12 +345,6 @@ async def step_efficiency_scorer(output):
     # Linearly penalize extra steps
     return max(0.0, 1.0 - (num_steps - MAX_STEPS) / MAX_STEPS)
 
-
-logger = init_logger(
-    project="langgraph-supervisor",
-    api_key=os.environ.get("BRAINTRUST_API_KEY"),
-)
-set_global_handler(BraintrustCallbackHandler(logger=logger))
 
 # Basic evaluation
 Eval(

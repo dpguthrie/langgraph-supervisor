@@ -37,7 +37,7 @@ dependencies = [
     "langchain-anthropic<1.4.0",
     "deepagents<0.4.0",
     "python-dotenv>=1.1.1",
-    "braintrust<0.6.0",
+    "braintrust==0.10.0",
     "braintrust-langchain<0.3.0",
     "rich>=14.2.0",
     "autoevals<0.1.0",
@@ -97,3 +97,6 @@ python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+
+[tool.uv.sources]
+braintrust = { git = "https://github.com/braintrustdata/braintrust-sdk-python", subdirectory = "py", rev = "main" }

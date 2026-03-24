@@ -13,24 +13,23 @@ if str(project_root) not in sys.path:
 
 from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, load_parameters  # noqa: E402
-from braintrust.logger import Prompt  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
 from evals.parameters import (  # noqa: E402
+    MATH_AGENT_EVAL_PARAMETERS_SLUG,
     MATH_AGENT_PROMPT_PARAM,
     PROJECT_NAME,
-    SUPERVISOR_EVAL_PARAMETERS_SLUG,
     parse_prompt_param,
 )
-from src.config import DEFAULT_MATH_MODEL  # noqa: E402
 from src.agents.math_agent import get_math_agent  # noqa: E402
+from src.config import DEFAULT_MATH_MODEL  # noqa: E402
 
 load_dotenv()
 
 
 saved_parameters = load_parameters(
     project=PROJECT_NAME,
-    slug=SUPERVISOR_EVAL_PARAMETERS_SLUG,
+    slug=MATH_AGENT_EVAL_PARAMETERS_SLUG,
 )
 
 
@@ -70,7 +69,7 @@ async def run_math_task(input: dict, hooks: Any = None) -> dict:
         math_agent_prompt = params.get(MATH_AGENT_PROMPT_PARAM)
         math_model = None
 
-        if isinstance(math_agent_prompt, Prompt):
+        if math_agent_prompt is not None:
             math_agent_prompt, math_model = parse_prompt_param(math_agent_prompt)
 
         # Get math agent with custom parameters

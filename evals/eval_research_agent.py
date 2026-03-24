@@ -14,24 +14,23 @@ if str(project_root) not in sys.path:
 
 from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, load_parameters  # noqa: E402
-from braintrust.logger import Prompt  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
 from evals.parameters import (  # noqa: E402
     PROJECT_NAME,
+    RESEARCH_AGENT_EVAL_PARAMETERS_SLUG,
     RESEARCH_AGENT_PROMPT_PARAM,
-    SUPERVISOR_EVAL_PARAMETERS_SLUG,
     parse_prompt_param,
 )
-from src.config import DEFAULT_RESEARCH_MODEL  # noqa: E402
 from src.agents.research_agent import get_research_agent  # noqa: E402
+from src.config import DEFAULT_RESEARCH_MODEL  # noqa: E402
 
 load_dotenv()
 
 
 saved_parameters = load_parameters(
     project=PROJECT_NAME,
-    slug=SUPERVISOR_EVAL_PARAMETERS_SLUG,
+    slug=RESEARCH_AGENT_EVAL_PARAMETERS_SLUG,
 )
 
 
@@ -71,7 +70,7 @@ async def run_research_task(input: dict, hooks: Any = None) -> dict:
         research_agent_prompt = params.get(RESEARCH_AGENT_PROMPT_PARAM)
         research_model = None
 
-        if isinstance(research_agent_prompt, Prompt):
+        if research_agent_prompt is not None:
             research_agent_prompt, research_model = parse_prompt_param(
                 research_agent_prompt
             )

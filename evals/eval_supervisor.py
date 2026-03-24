@@ -15,7 +15,6 @@ if str(project_root) not in sys.path:
 
 from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, init_dataset, load_parameters  # noqa: E402
-from braintrust.logger import Prompt  # noqa: E402
 from braintrust.oai import wrap_openai  # noqa: E402
 from braintrust_langchain import BraintrustCallbackHandler  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
@@ -52,7 +51,7 @@ def unwrap_parameters(params: dict) -> dict:
 
     result = {}
     for key, param in params.items():
-        if not isinstance(param, Prompt):
+        if param is None:
             continue
 
         prompt_text, model = parse_prompt_param(param)

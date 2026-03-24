@@ -14,83 +14,50 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from autoevals import LLMClassifier  # noqa: E402
-from braintrust import Eval, init_dataset  # noqa: E402
+from braintrust import Eval, init_dataset, load_parameters  # noqa: E402
+from braintrust.logger import Prompt  # noqa: E402
 from braintrust.oai import wrap_openai  # noqa: E402
 from braintrust_langchain import BraintrustCallbackHandler  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
-from openai import OpenAI  # noqa: E402
+from openai import AsyncOpenAI  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
-from evals.braintrust_parameter_patch import apply_parameter_patch  # noqa: E402
 from evals.parameters import (  # noqa: E402
-    MathAgentPromptParam,
-    MathModelParam,
-    ResearchAgentPromptParam,
-    ResearchModelParam,
-    SupervisorModelParam,
-    SystemPromptParam,
+    PROJECT_NAME,
+    SUPERVISOR_EVAL_PARAMETERS_SLUG,
+    prompt_to_text,
 )
 
 # Import our supervisor system
 from src.agents.deep_agent import get_supervisor  # noqa: E402
-from src.config import (  # noqa: E402
-    AgentConfig,
-)
+from src.config import AgentConfig  # noqa: E402
 
 load_dotenv()
 
-# Apply the parameter patch for both local dev server and remote Modal deployment
-# This fixes the Braintrust SDK's missing default value extraction for Pydantic parameters
-apply_parameter_patch()
 
-
-client = wrap_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
-
-
+client = wrap_openai(AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")))
 def unwrap_parameters(params: dict) -> dict:
-    """Extract parameter values from hooks.parameters.
+    """Extract usable values from Braintrust eval parameters.
 
     Braintrust parameters can be either:
-    - Parameter model instances (single-field Pydantic models) - extract 'value' field
-    - Parameter classes (when running locally) - instantiate then extract 'value'
+    - Special prompt parameters, returned as Braintrust Prompt objects
+    - Special model parameters, returned as strings
     - Plain values (fallback) - use directly
 
     Args:
-        params: Dict of parameter names to Parameter classes/instances/values
+        params: Dict of parameter names to Braintrust parameter values
 
     Returns:
         Dict of parameter names to actual values (filters out None)
-
-    Example:
-        Input:  {"system_prompt": SystemPromptParam(value="Hello"), "other": "value"}
-        Output: {"system_prompt": "Hello", "other": "value"}
     """
-    import inspect
-
-    from pydantic import BaseModel
 
     result = {}
     for key, param in params.items():
         if param is None:
             continue
 
-        # If it's a Pydantic model class (not an instance), instantiate it with defaults
-        if inspect.isclass(param) and issubclass(param, BaseModel):
-            param_instance = param()  # Instantiate with default values
-            # Extract the 'value' field (single-field model pattern)
-            if hasattr(param_instance, "value"):
-                result[key] = param_instance.value  # type: ignore
-            else:
-                # Fallback: use the whole instance
-                result[key] = param_instance
-        # If it's already a Pydantic model instance, extract the 'value' field
-        elif isinstance(param, BaseModel):
-            if hasattr(param, "value"):
-                result[key] = param.value  # type: ignore
-            else:
-                # Fallback: use the whole instance
-                result[key] = param
-        # Otherwise use the param directly (fallback for plain values)
+        if isinstance(param, Prompt):
+            result[key] = prompt_to_text(param)
         else:
             result[key] = param
     return result
@@ -265,30 +232,19 @@ async def routing_accuracy_scorer(input, output, expected, metadata, trace):
     prompt = ROUTING_ACCURACY_PROMPT.format(
         input=input, agents_called=agents_called_str
     )
-    response = client.responses.parse(
+    response = await client.responses.parse(
         model="gpt-4o-mini",
         input=[{"role": "user", "content": prompt}],
         text_format=RoutingAccuracyOutput,
     )
     output = response.output_parsed
-    if output is None:
-        return {
-            "name": "Routing Accuracy",
-            "score": 0.0,
-            "metadata": {
-                "agents_called": agents_called_str,
-                "reasoning": "No output",
-                "choice": "D",
-            },
-        }
-
     return {
         "name": "Routing Accuracy",
-        "score": choice_map.get(output.choice, 0.0),
+        "score": choice_map.get(output.choice, 0.0) if output else 0.0,
         "metadata": {
             "agents_called": agents_called_str,
-            "reasoning": output.reasoning,
-            "choice": output.choice,
+            "reasoning": output.reasoning if output else "No output",
+            "choice": output.choice if output else "D",
         },
     }
 
@@ -346,6 +302,12 @@ async def step_efficiency_scorer(output):
     return max(0.0, 1.0 - (num_steps - MAX_STEPS) / MAX_STEPS)
 
 
+saved_parameters = load_parameters(
+    project=PROJECT_NAME,
+    slug=SUPERVISOR_EVAL_PARAMETERS_SLUG,
+)
+
+
 # Basic evaluation
 Eval(
     "langgraph-supervisor",
@@ -356,14 +318,5 @@ Eval(
         routing_accuracy_scorer,
         step_efficiency_scorer,
     ],  # type: ignore
-    parameters={
-        # Prompt parameters
-        "system_prompt": SystemPromptParam,
-        "research_agent_prompt": ResearchAgentPromptParam,
-        "math_agent_prompt": MathAgentPromptParam,
-        # Model selection parameters
-        "supervisor_model": SupervisorModelParam,
-        "research_model": ResearchModelParam,
-        "math_model": MathModelParam,
-    },
+    parameters=saved_parameters,
 )

@@ -41,12 +41,6 @@ def braintrust_eval_server():
     """
     from pathlib import Path
 
-    # IMPORTANT: Apply the SDK patch BEFORE any Braintrust imports
-    # This ensures the patched version is used when evaluators are loaded
-    from evals.braintrust_parameter_patch import apply_parameter_patch
-
-    apply_parameter_patch()
-
     # Now import Braintrust components (they will use the patched version)
     from braintrust.cli.eval import EvaluatorState, FileHandle, update_evaluators
     from braintrust.devserver.server import create_app

@@ -12,13 +12,24 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from autoevals import LLMClassifier  # noqa: E402
-from braintrust import Eval  # noqa: E402
+from braintrust import Eval, load_parameters  # noqa: E402
+from braintrust.logger import Prompt  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
-from evals.parameters import MathAgentPromptParam, MathModelParam  # noqa: E402
+from evals.parameters import (  # noqa: E402
+    PROJECT_NAME,
+    SUPERVISOR_EVAL_PARAMETERS_SLUG,
+    prompt_to_text,
+)
 from src.agents.math_agent import get_math_agent  # noqa: E402
 
 load_dotenv()
+
+
+saved_parameters = load_parameters(
+    project=PROJECT_NAME,
+    slug=SUPERVISOR_EVAL_PARAMETERS_SLUG,
+)
 
 
 def serialize_message(msg: Any) -> dict:
@@ -56,6 +67,9 @@ async def run_math_task(input: dict, hooks: Any = None) -> dict:
         # Get parameter values (they come directly from Braintrust's Parameter class)
         math_agent_prompt = params.get("math_agent_prompt")
         math_model = params.get("math_model", "gpt-4o-mini")
+
+        if isinstance(math_agent_prompt, Prompt):
+            math_agent_prompt = prompt_to_text(math_agent_prompt)
 
         # Get math agent with custom parameters
         agent = get_math_agent(system_prompt=math_agent_prompt, model=math_model)
@@ -238,8 +252,5 @@ Eval(
         response_format_scorer,
         calculation_correctness_scorer,
     ],  # type: ignore
-    parameters={
-        "math_agent_prompt": MathAgentPromptParam,
-        "math_model": MathModelParam,
-    },
+    parameters=saved_parameters,
 )

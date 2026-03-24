@@ -21,7 +21,11 @@ from dotenv import load_dotenv  # noqa: E402
 from openai import AsyncOpenAI  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
-from evals.parameters import PROJECT_NAME, SUPERVISOR_EVAL_PARAMETERS_SLUG  # noqa: E402
+from evals.parameters import (  # noqa: E402
+    PARAM_TO_CONFIG_KEY,
+    PROJECT_NAME,
+    SUPERVISOR_EVAL_PARAMETERS_SLUG,
+)
 
 # Import our supervisor system
 from src.agents.deep_agent import get_supervisor  # noqa: E402
@@ -31,6 +35,8 @@ load_dotenv()
 
 
 client = wrap_openai(AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")))
+
+
 def unwrap_parameters(params: dict) -> dict:
     """Filter out `None` values from Braintrust eval parameters."""
 
@@ -38,7 +44,10 @@ def unwrap_parameters(params: dict) -> dict:
     for key, param in params.items():
         if param is None:
             continue
-        result[key] = param
+
+        config_key = PARAM_TO_CONFIG_KEY.get(key)
+        if config_key is not None:
+            result[config_key] = param
     return result
 
 

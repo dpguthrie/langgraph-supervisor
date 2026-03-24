@@ -19,6 +19,22 @@ PROJECT_NAME = "langgraph-supervisor"
 SUPERVISOR_EVAL_PARAMETERS_NAME = "Supervisor Eval Config"
 SUPERVISOR_EVAL_PARAMETERS_SLUG = "supervisor-eval-config"
 
+SUPERVISOR_MODEL_PARAM = "01_supervisor_model"
+SYSTEM_PROMPT_PARAM = "02_system_prompt"
+RESEARCH_MODEL_PARAM = "03_research_model"
+RESEARCH_AGENT_PROMPT_PARAM = "04_research_agent_prompt"
+MATH_MODEL_PARAM = "05_math_model"
+MATH_AGENT_PROMPT_PARAM = "06_math_agent_prompt"
+
+PARAM_TO_CONFIG_KEY = {
+    SUPERVISOR_MODEL_PARAM: "supervisor_model",
+    SYSTEM_PROMPT_PARAM: "system_prompt",
+    RESEARCH_MODEL_PARAM: "research_model",
+    RESEARCH_AGENT_PROMPT_PARAM: "research_agent_prompt",
+    MATH_MODEL_PARAM: "math_model",
+    MATH_AGENT_PROMPT_PARAM: "math_agent_prompt",
+}
+
 
 class SystemPromptParam(BaseModel):
     value: str = Field(
@@ -42,10 +58,10 @@ class MathAgentPromptParam(BaseModel):
 
 
 SUPERVISOR_EVAL_PARAMETERS: EvalParameters = {
-    "system_prompt": SystemPromptParam,
-    "research_agent_prompt": ResearchAgentPromptParam,
-    "math_agent_prompt": MathAgentPromptParam,
-    "supervisor_model": cast(
+    SYSTEM_PROMPT_PARAM: SystemPromptParam,
+    RESEARCH_AGENT_PROMPT_PARAM: ResearchAgentPromptParam,
+    MATH_AGENT_PROMPT_PARAM: MathAgentPromptParam,
+    SUPERVISOR_MODEL_PARAM: cast(
         ModelParameter,
         {
             "type": "model",
@@ -53,7 +69,7 @@ SUPERVISOR_EVAL_PARAMETERS: EvalParameters = {
             "description": "Model to use for the supervisor agent.",
         },
     ),
-    "research_model": cast(
+    RESEARCH_MODEL_PARAM: cast(
         ModelParameter,
         {
             "type": "model",
@@ -61,7 +77,7 @@ SUPERVISOR_EVAL_PARAMETERS: EvalParameters = {
             "description": "Model to use for the research agent.",
         },
     ),
-    "math_model": cast(
+    MATH_MODEL_PARAM: cast(
         ModelParameter,
         {
             "type": "model",

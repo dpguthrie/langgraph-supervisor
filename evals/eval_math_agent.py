@@ -15,7 +15,12 @@ from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, load_parameters  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
-from evals.parameters import PROJECT_NAME, SUPERVISOR_EVAL_PARAMETERS_SLUG  # noqa: E402
+from evals.parameters import (  # noqa: E402
+    MATH_AGENT_PROMPT_PARAM,
+    MATH_MODEL_PARAM,
+    PROJECT_NAME,
+    SUPERVISOR_EVAL_PARAMETERS_SLUG,
+)
 from src.agents.math_agent import get_math_agent  # noqa: E402
 
 load_dotenv()
@@ -60,8 +65,8 @@ async def run_math_task(input: dict, hooks: Any = None) -> dict:
         params = hooks.parameters if hooks and hasattr(hooks, "parameters") else {}
 
         # Get parameter values from the shared saved parameters config
-        math_agent_prompt = params.get("math_agent_prompt")
-        math_model = params.get("math_model", "gpt-4o-mini")
+        math_agent_prompt = params.get(MATH_AGENT_PROMPT_PARAM)
+        math_model = params.get(MATH_MODEL_PARAM, "gpt-4o-mini")
 
         # Get math agent with custom parameters
         agent = get_math_agent(system_prompt=math_agent_prompt, model=math_model)

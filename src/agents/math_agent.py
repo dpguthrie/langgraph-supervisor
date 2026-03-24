@@ -1,9 +1,9 @@
 """Math agent with arithmetic capabilities."""
 
 from langchain.agents import create_agent
-from langchain.chat_models import init_chat_model
 
-from src.config import DEFAULT_MATH_AGENT_PROMPT
+from src.config import DEFAULT_MATH_AGENT_PROMPT, DEFAULT_MATH_MODEL
+from src.llm import get_gateway_chat_model
 
 
 def add(a: float, b: float) -> float:
@@ -26,19 +26,21 @@ def divide(a: float, b: float) -> float:
     return a / b
 
 
-def get_math_agent(system_prompt: str | None = None, model: str = "gpt-4o-mini"):
+def get_math_agent(
+    system_prompt: str | None = None, model: str = DEFAULT_MATH_MODEL
+):
     """Create math agent with optional custom prompt and model.
 
     Args:
         system_prompt: Custom system prompt. If None, uses default.
-        model: Model name to use (default: gpt-4o-mini)
+        model: Model name to use.
     """
     # Use provided prompt or fall back to default
     prompt = system_prompt if system_prompt is not None else DEFAULT_MATH_AGENT_PROMPT
 
     tools = [add, subtract, multiply, divide]
     return create_agent(
-        model=init_chat_model(f"openai:{model}"),
+        model=get_gateway_chat_model(model),
         tools=tools,
         system_prompt=prompt,
         name="MathAgent",

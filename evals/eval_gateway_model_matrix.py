@@ -76,8 +76,8 @@ def _serialize_message(msg: Any) -> dict:
 def _build_task(model: str):
     async def _task(input: dict, hooks: Any = None) -> dict[str, list]:
         try:
-            os.environ["OPENAI_API_KEY"] = GATEWAY_API_KEY or ""
-            os.environ["OPENAI_BASE_URL"] = GATEWAY_BASE_URL
+            os.environ["BRAINTRUST_API_KEY"] = GATEWAY_API_KEY or ""
+            os.environ["BRAINTRUST_GATEWAY_URL"] = GATEWAY_BASE_URL
 
             config = AgentConfig(
                 supervisor_model=model,

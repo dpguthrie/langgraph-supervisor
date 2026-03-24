@@ -167,8 +167,8 @@ async def run_question(question: str) -> tuple[str, bool, Optional[dict]]:
 async def main_async(args):
     """Run questions through the supervisor concurrently."""
     # Check required environment variables
-    if not os.environ.get("OPENAI_API_KEY"):
-        print("Missing OPENAI_API_KEY in environment", file=sys.stderr)
+    if not os.environ.get("BRAINTRUST_API_KEY"):
+        print("Missing BRAINTRUST_API_KEY in environment", file=sys.stderr)
         sys.exit(2)
 
     num_questions = random.randint(1, 100)

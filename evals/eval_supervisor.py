@@ -15,6 +15,7 @@ if str(project_root) not in sys.path:
 
 from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, init_dataset, load_parameters  # noqa: E402
+from braintrust.logger import Prompt  # noqa: E402
 from braintrust.oai import wrap_openai  # noqa: E402
 from braintrust_langchain import BraintrustCallbackHandler  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
@@ -22,32 +23,52 @@ from openai import AsyncOpenAI  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from evals.parameters import (  # noqa: E402
-    PARAM_TO_CONFIG_KEY,
+    MATH_AGENT_PROMPT_PARAM,
     PROJECT_NAME,
+    RESEARCH_AGENT_PROMPT_PARAM,
     SUPERVISOR_EVAL_PARAMETERS_SLUG,
+    SYSTEM_PROMPT_PARAM,
+    parse_prompt_param,
 )
 
 # Import our supervisor system
 from src.agents.deep_agent import get_supervisor  # noqa: E402
 from src.config import AgentConfig  # noqa: E402
+from src.llm import DEFAULT_BRAINTRUST_GATEWAY_URL  # noqa: E402
 
 load_dotenv()
 
 
-client = wrap_openai(AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")))
+client = wrap_openai(
+    AsyncOpenAI(
+        api_key=os.getenv("BRAINTRUST_API_KEY"),
+        base_url=os.getenv("BRAINTRUST_GATEWAY_URL", DEFAULT_BRAINTRUST_GATEWAY_URL),
+    )
+)
 
 
 def unwrap_parameters(params: dict) -> dict:
-    """Filter out `None` values from Braintrust eval parameters."""
+    """Convert Braintrust prompt parameters into AgentConfig fields."""
 
     result = {}
     for key, param in params.items():
-        if param is None:
+        if not isinstance(param, Prompt):
             continue
 
-        config_key = PARAM_TO_CONFIG_KEY.get(key)
-        if config_key is not None:
-            result[config_key] = param
+        prompt_text, model = parse_prompt_param(param)
+
+        if key == SYSTEM_PROMPT_PARAM:
+            result["system_prompt"] = prompt_text
+            if model is not None:
+                result["supervisor_model"] = model
+        elif key == RESEARCH_AGENT_PROMPT_PARAM:
+            result["research_agent_prompt"] = prompt_text
+            if model is not None:
+                result["research_model"] = model
+        elif key == MATH_AGENT_PROMPT_PARAM:
+            result["math_agent_prompt"] = prompt_text
+            if model is not None:
+                result["math_model"] = model
     return result
 
 

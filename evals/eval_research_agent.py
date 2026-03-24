@@ -14,14 +14,16 @@ if str(project_root) not in sys.path:
 
 from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, load_parameters  # noqa: E402
+from braintrust.logger import Prompt  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
 from evals.parameters import (  # noqa: E402
     PROJECT_NAME,
     RESEARCH_AGENT_PROMPT_PARAM,
-    RESEARCH_MODEL_PARAM,
     SUPERVISOR_EVAL_PARAMETERS_SLUG,
+    parse_prompt_param,
 )
+from src.config import DEFAULT_RESEARCH_MODEL  # noqa: E402
 from src.agents.research_agent import get_research_agent  # noqa: E402
 
 load_dotenv()
@@ -67,11 +69,17 @@ async def run_research_task(input: dict, hooks: Any = None) -> dict:
 
         # Get parameter values from the shared saved parameters config
         research_agent_prompt = params.get(RESEARCH_AGENT_PROMPT_PARAM)
-        research_model = params.get(RESEARCH_MODEL_PARAM, "gpt-4o-mini")
+        research_model = None
+
+        if isinstance(research_agent_prompt, Prompt):
+            research_agent_prompt, research_model = parse_prompt_param(
+                research_agent_prompt
+            )
 
         # Get research agent with custom parameters
         agent = get_research_agent(
-            system_prompt=research_agent_prompt, model=research_model
+            system_prompt=research_agent_prompt,
+            model=research_model or DEFAULT_RESEARCH_MODEL,
         )
 
         # Run the agent

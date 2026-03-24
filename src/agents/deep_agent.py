@@ -1,11 +1,9 @@
 """Deep agent orchestrator with subagent routing."""
 
-import os
 from typing import Any, TypedDict
 
 from deepagents.middleware.subagents import SubAgentMiddleware
 from langchain.agents import create_agent
-from langchain.chat_models import init_chat_model
 from langchain_core.runnables import Runnable
 
 from src.agents.math_agent import get_math_agent
@@ -14,6 +12,7 @@ from src.agents.state import AgentState
 from src.config import (
     AgentConfig,
 )
+from src.llm import get_gateway_chat_model
 
 
 class CompiledSubAgent(TypedDict):
@@ -74,10 +73,7 @@ def get_deep_agent(config: AgentConfig | None = None):
         config = AgentConfig()
 
     # Initialize supervisor model with configured model
-    model = init_chat_model(
-        model=f"openai:{config.supervisor_model}",
-        api_key=os.environ.get("OPENAI_API_KEY"),
-    )
+    model = get_gateway_chat_model(config.supervisor_model)
 
     # Get subagents with config at runtime (not import time)
     sub_agents = _get_sub_agents(config)
@@ -103,10 +99,7 @@ def get_deep_agent(config: AgentConfig | None = None):
         tools=None,
         middleware=deepagent_middleware,
         state_schema=AgentState,
-    ).with_config({
-        "recursion_limit": 25,
-        "run_name": "Supervisor Agent"
-    })
+    ).with_config({"recursion_limit": 25, "run_name": "Supervisor Agent"})
 
     return agent
 

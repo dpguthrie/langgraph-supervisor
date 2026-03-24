@@ -3,8 +3,8 @@
 from typing import cast
 
 from braintrust import EvalParameters, projects
-from braintrust.parameters import ModelParameter
-from pydantic import BaseModel, Field
+from braintrust.logger import Prompt
+from braintrust.parameters import PromptParameter
 
 from src.config import (
     DEFAULT_MATH_AGENT_PROMPT,
@@ -19,70 +19,82 @@ PROJECT_NAME = "langgraph-supervisor"
 SUPERVISOR_EVAL_PARAMETERS_NAME = "Supervisor Eval Config"
 SUPERVISOR_EVAL_PARAMETERS_SLUG = "supervisor-eval-config"
 
-SUPERVISOR_MODEL_PARAM = "01_supervisor_model"
-SYSTEM_PROMPT_PARAM = "02_system_prompt"
-RESEARCH_MODEL_PARAM = "03_research_model"
-RESEARCH_AGENT_PROMPT_PARAM = "04_research_agent_prompt"
-MATH_MODEL_PARAM = "05_math_model"
-MATH_AGENT_PROMPT_PARAM = "06_math_agent_prompt"
+SYSTEM_PROMPT_PARAM = "system_prompt"
+RESEARCH_AGENT_PROMPT_PARAM = "research_agent_prompt"
+MATH_AGENT_PROMPT_PARAM = "math_agent_prompt"
 
-PARAM_TO_CONFIG_KEY = {
-    SUPERVISOR_MODEL_PARAM: "supervisor_model",
-    SYSTEM_PROMPT_PARAM: "system_prompt",
-    RESEARCH_MODEL_PARAM: "research_model",
-    RESEARCH_AGENT_PROMPT_PARAM: "research_agent_prompt",
-    MATH_MODEL_PARAM: "math_model",
-    MATH_AGENT_PROMPT_PARAM: "math_agent_prompt",
-}
+def parse_prompt_param(prompt: Prompt) -> tuple[str, str | None]:
+    """Return the instruction text and default model from a Braintrust prompt parameter."""
 
+    prompt_block = prompt.prompt
+    if prompt_block is None:
+        raise ValueError(f"Prompt parameter '{prompt.name}' is empty")
 
-class SystemPromptParam(BaseModel):
-    value: str = Field(
-        default=DEFAULT_SYSTEM_PROMPT,
-        description="Supervisor system prompt.",
-    )
+    if getattr(prompt_block, "type", None) == "completion":
+        content = prompt_block.content
+    else:
+        messages = getattr(prompt_block, "messages", None) or []
+        if not messages:
+            raise ValueError(f"Prompt parameter '{prompt.name}' has no messages")
 
+        message_content = messages[0].content
+        if isinstance(message_content, str):
+            content = message_content
+        else:
+            text_parts = []
+            for part in message_content:
+                text = getattr(part, "text", None)
+                if isinstance(text, str):
+                    text_parts.append(text)
+            content = "\n".join(text_parts)
 
-class ResearchAgentPromptParam(BaseModel):
-    value: str = Field(
-        default=DEFAULT_RESEARCH_AGENT_PROMPT,
-        description="Research agent system prompt.",
-    )
-
-
-class MathAgentPromptParam(BaseModel):
-    value: str = Field(
-        default=DEFAULT_MATH_AGENT_PROMPT,
-        description="Math agent system prompt.",
-    )
+    model = prompt.options.get("model")
+    return content, model if isinstance(model, str) else None
 
 
 SUPERVISOR_EVAL_PARAMETERS: EvalParameters = {
-    SYSTEM_PROMPT_PARAM: SystemPromptParam,
-    RESEARCH_AGENT_PROMPT_PARAM: ResearchAgentPromptParam,
-    MATH_AGENT_PROMPT_PARAM: MathAgentPromptParam,
-    SUPERVISOR_MODEL_PARAM: cast(
-        ModelParameter,
+    SYSTEM_PROMPT_PARAM: cast(
+        PromptParameter,
         {
-            "type": "model",
-            "default": DEFAULT_SUPERVISOR_MODEL,
-            "description": "Model to use for the supervisor agent.",
+            "type": "prompt",
+            "description": "Supervisor system prompt and model.",
+            "default": {
+                "prompt": {
+                    "type": "chat",
+                    "messages": [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT}],
+                },
+                "options": {"model": DEFAULT_SUPERVISOR_MODEL},
+            },
         },
     ),
-    RESEARCH_MODEL_PARAM: cast(
-        ModelParameter,
+    RESEARCH_AGENT_PROMPT_PARAM: cast(
+        PromptParameter,
         {
-            "type": "model",
-            "default": DEFAULT_RESEARCH_MODEL,
-            "description": "Model to use for the research agent.",
+            "type": "prompt",
+            "description": "Research agent system prompt and model.",
+            "default": {
+                "prompt": {
+                    "type": "chat",
+                    "messages": [
+                        {"role": "system", "content": DEFAULT_RESEARCH_AGENT_PROMPT}
+                    ],
+                },
+                "options": {"model": DEFAULT_RESEARCH_MODEL},
+            },
         },
     ),
-    MATH_MODEL_PARAM: cast(
-        ModelParameter,
+    MATH_AGENT_PROMPT_PARAM: cast(
+        PromptParameter,
         {
-            "type": "model",
-            "default": DEFAULT_MATH_MODEL,
-            "description": "Model to use for the math agent.",
+            "type": "prompt",
+            "description": "Math agent system prompt and model.",
+            "default": {
+                "prompt": {
+                    "type": "chat",
+                    "messages": [{"role": "system", "content": DEFAULT_MATH_AGENT_PROMPT}],
+                },
+                "options": {"model": DEFAULT_MATH_MODEL},
+            },
         },
     ),
 }

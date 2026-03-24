@@ -20,9 +20,8 @@ def _set_if_undefined(var: str):
 def main():
     load_dotenv()
 
-    _set_if_undefined("OPENAI_API_KEY")
-    _set_if_undefined("TAVILY_API_KEY")
     _set_if_undefined("BRAINTRUST_API_KEY")
+    _set_if_undefined("TAVILY_API_KEY")
 
     console = Console()
 
@@ -32,9 +31,8 @@ def main():
     from src.agent_graph import get_supervisor
 
     # Initialize Braintrust logging for the session
-    logger = braintrust.start_logger(
+    logger = braintrust.init_logger(
         project="langgraph-supervisor",
-        experiment="local-dev",
     )
 
     # Create callback handler for tracing

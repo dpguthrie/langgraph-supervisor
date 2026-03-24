@@ -15,18 +15,13 @@ if str(project_root) not in sys.path:
 
 from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, init_dataset, load_parameters  # noqa: E402
-from braintrust.logger import Prompt  # noqa: E402
 from braintrust.oai import wrap_openai  # noqa: E402
 from braintrust_langchain import BraintrustCallbackHandler  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 from openai import AsyncOpenAI  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
-from evals.parameters import (  # noqa: E402
-    PROJECT_NAME,
-    SUPERVISOR_EVAL_PARAMETERS_SLUG,
-    prompt_to_text,
-)
+from evals.parameters import PROJECT_NAME, SUPERVISOR_EVAL_PARAMETERS_SLUG  # noqa: E402
 
 # Import our supervisor system
 from src.agents.deep_agent import get_supervisor  # noqa: E402
@@ -37,29 +32,13 @@ load_dotenv()
 
 client = wrap_openai(AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")))
 def unwrap_parameters(params: dict) -> dict:
-    """Extract usable values from Braintrust eval parameters.
-
-    Braintrust parameters can be either:
-    - Special prompt parameters, returned as Braintrust Prompt objects
-    - Special model parameters, returned as strings
-    - Plain values (fallback) - use directly
-
-    Args:
-        params: Dict of parameter names to Braintrust parameter values
-
-    Returns:
-        Dict of parameter names to actual values (filters out None)
-    """
+    """Filter out `None` values from Braintrust eval parameters."""
 
     result = {}
     for key, param in params.items():
         if param is None:
             continue
-
-        if isinstance(param, Prompt):
-            result[key] = prompt_to_text(param)
-        else:
-            result[key] = param
+        result[key] = param
     return result
 
 

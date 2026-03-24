@@ -3,8 +3,8 @@
 from typing import cast
 
 from braintrust import EvalParameters, projects
-from braintrust.logger import Prompt
-from braintrust.parameters import ModelParameter, PromptParameter
+from braintrust.parameters import ModelParameter
+from pydantic import BaseModel, Field
 
 from src.config import (
     DEFAULT_MATH_AGENT_PROMPT,
@@ -19,74 +19,32 @@ PROJECT_NAME = "langgraph-supervisor"
 SUPERVISOR_EVAL_PARAMETERS_NAME = "Supervisor Eval Config"
 SUPERVISOR_EVAL_PARAMETERS_SLUG = "supervisor-eval-config"
 
-def prompt_to_text(prompt: Prompt) -> str:
-    """Convert a Braintrust prompt parameter into the instruction string used by agents."""
 
-    prompt_block = prompt.prompt
-    if prompt_block is None:
-        raise ValueError(f"Prompt parameter '{prompt.name}' is empty")
+class SystemPromptParam(BaseModel):
+    value: str = Field(
+        default=DEFAULT_SYSTEM_PROMPT,
+        description="Supervisor system prompt.",
+    )
 
-    if getattr(prompt_block, "type", None) == "completion":
-        return prompt_block.content
 
-    messages = getattr(prompt_block, "messages", None) or []
-    if not messages:
-        raise ValueError(f"Prompt parameter '{prompt.name}' has no messages")
+class ResearchAgentPromptParam(BaseModel):
+    value: str = Field(
+        default=DEFAULT_RESEARCH_AGENT_PROMPT,
+        description="Research agent system prompt.",
+    )
 
-    content = messages[0].content
-    if isinstance(content, str):
-        return content
 
-    text_parts = []
-    for part in content:
-        text = getattr(part, "text", None)
-        if isinstance(text, str):
-            text_parts.append(text)
-    return "\n".join(text_parts)
+class MathAgentPromptParam(BaseModel):
+    value: str = Field(
+        default=DEFAULT_MATH_AGENT_PROMPT,
+        description="Math agent system prompt.",
+    )
 
 
 SUPERVISOR_EVAL_PARAMETERS: EvalParameters = {
-    "system_prompt": cast(
-        PromptParameter,
-        {
-            "type": "prompt",
-            "description": "Supervisor system prompt.",
-            "default": {
-                "prompt": {
-                    "type": "chat",
-                    "messages": [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT}],
-                }
-            },
-        },
-    ),
-    "research_agent_prompt": cast(
-        PromptParameter,
-        {
-            "type": "prompt",
-            "description": "Research agent system prompt.",
-            "default": {
-                "prompt": {
-                    "type": "chat",
-                    "messages": [
-                        {"role": "system", "content": DEFAULT_RESEARCH_AGENT_PROMPT}
-                    ],
-                }
-            },
-        },
-    ),
-    "math_agent_prompt": cast(
-        PromptParameter,
-        {
-            "type": "prompt",
-            "description": "Math agent system prompt.",
-            "default": {
-                "prompt": {
-                    "type": "chat",
-                    "messages": [{"role": "system", "content": DEFAULT_MATH_AGENT_PROMPT}],
-                }
-            },
-        },
-    ),
+    "system_prompt": SystemPromptParam,
+    "research_agent_prompt": ResearchAgentPromptParam,
+    "math_agent_prompt": MathAgentPromptParam,
     "supervisor_model": cast(
         ModelParameter,
         {

@@ -13,14 +13,9 @@ if str(project_root) not in sys.path:
 
 from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, load_parameters  # noqa: E402
-from braintrust.logger import Prompt  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
-from evals.parameters import (  # noqa: E402
-    PROJECT_NAME,
-    SUPERVISOR_EVAL_PARAMETERS_SLUG,
-    prompt_to_text,
-)
+from evals.parameters import PROJECT_NAME, SUPERVISOR_EVAL_PARAMETERS_SLUG  # noqa: E402
 from src.agents.math_agent import get_math_agent  # noqa: E402
 
 load_dotenv()
@@ -64,12 +59,9 @@ async def run_math_task(input: dict, hooks: Any = None) -> dict:
         # Extract parameters if provided (when running remotely)
         params = hooks.parameters if hooks and hasattr(hooks, "parameters") else {}
 
-        # Get parameter values (they come directly from Braintrust's Parameter class)
+        # Get parameter values from the shared saved parameters config
         math_agent_prompt = params.get("math_agent_prompt")
         math_model = params.get("math_model", "gpt-4o-mini")
-
-        if isinstance(math_agent_prompt, Prompt):
-            math_agent_prompt = prompt_to_text(math_agent_prompt)
 
         # Get math agent with custom parameters
         agent = get_math_agent(system_prompt=math_agent_prompt, model=math_model)

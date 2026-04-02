@@ -14,8 +14,7 @@
     },
     "ghcr.io/devcontainers/features/python:1": {
       "version": "3.13"
-    },
-    "ghcr.io/astral-sh/uv:0": {}
+    }
   },
   "containerEnv": {
     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
@@ -24,7 +23,7 @@
   },
   "remoteEnv": {
     "BRAINTRUST_DEFAULT_PROJECT": "langgraph-supervisor",
-    "PATH": "${containerWorkspaceFolder}/.venv/bin:/home/vscode/.cargo/bin:${containerEnv:PATH}",
+    "PATH": "${containerWorkspaceFolder}/.venv/bin:/home/vscode/.local/bin:/home/vscode/.cargo/bin:${containerEnv:PATH}",
     "PYTHONPATH": "${containerWorkspaceFolder}"
   },
   "customizations": {

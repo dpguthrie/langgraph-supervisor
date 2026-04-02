@@ -5,6 +5,13 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "[devcontainer] installing uv"
+  curl -LsSf https://astral.sh/uv/install.sh | env UV_UNMANAGED_INSTALL="$HOME/.local/bin" sh
+fi
+
 echo "[devcontainer] syncing Python environment with uv"
 uv sync --extra dev
 
@@ -22,8 +29,6 @@ if ! command -v bt >/dev/null 2>&1; then
   echo "[devcontainer] installing Braintrust CLI"
   curl -fsSL https://bt.dev/cli/install.sh | sh
 fi
-
-export PATH="$HOME/.cargo/bin:$PATH"
 
 if command -v bt >/dev/null 2>&1 && bt setup skills --help >/dev/null 2>&1; then
   if command -v claude >/dev/null 2>&1; then

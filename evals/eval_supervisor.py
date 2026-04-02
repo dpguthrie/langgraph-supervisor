@@ -6,7 +6,7 @@ Run this file to execute basic evaluations.
 import os
 import sys
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 # Ensure project root is on sys.path so `src` package can be imported
 project_root = Path(__file__).resolve().parents[1]
@@ -316,10 +316,24 @@ saved_parameters = load_parameters(
 )
 
 
+def get_dataset(
+    dataset_name: str = "Supervisor Agent Dataset",
+    tag: Optional[str] = None,
+):
+    """Load a dataset, optionally filtered by tag via EVAL_TAG env var."""
+    dataset_name = os.getenv("EVAL_DATASET", dataset_name)
+    tag = os.getenv("EVAL_TAG", tag)
+
+    kwargs: dict[str, Any] = {"project": "langgraph-supervisor", "name": dataset_name}
+    if tag:
+        kwargs["_internal_btql"] = {"filter": {"btql": f"tags INCLUDES '{tag}'"}}
+    return init_dataset(**kwargs)
+
+
 # Basic evaluation
 Eval(
     "langgraph-supervisor",
-    data=init_dataset("langgraph-supervisor", "Supervisor Agent Dataset"),
+    data=get_dataset(),
     task=run_supervisor_task,
     scores=[
         response_quality_scorer,

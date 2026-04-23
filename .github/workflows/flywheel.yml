@@ -61,13 +61,46 @@ jobs:
               -o ".claude/skills/bt-flywheel/references/${f}.md" 2>/dev/null || true
           done
 
+      - name: Write .env for eval invocations
+        run: |
+          cat > .env << EOF
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          BRAINTRUST_API_KEY=${{ secrets.BRAINTRUST_API_KEY }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          TAVILY_API_KEY=${{ secrets.TAVILY_API_KEY }}
+          BRAINTRUST_DEFAULT_PROJECT=langgraph-supervisor
+          BRAINTRUST_GATEWAY_URL=https://gateway.braintrust.dev
+          BRAINTRUST_GATEWAY_BASE_URL=https://gateway.braintrust.dev/v1
+          EOF
+
       - name: Run flywheel optimization cycle
         id: flywheel
         run: |
           claude --print --dangerously-skip-permissions \
-            -p "Invoke the Skill tool with skill='bt-flywheel' to run the full self-improvement optimization cycle. You are operating in autonomous CI mode (FLYWHEEL_AUTONOMOUS=true). Follow the skill's 8-phase cycle exactly. When complete, ensure bt-flywheel-summary.json is written to the working directory." \
+            -p "$FLYWHEEL_PROMPT" \
             2>&1 | tee flywheel-output.log
         env:
+          FLYWHEEL_PROMPT: |
+            Invoke the Skill tool with skill='bt-flywheel' to run the full self-improvement optimization cycle in autonomous CI mode.
+
+            ## System context
+
+            This is a LangGraph multi-agent supervisor system (Braintrust project: langgraph-supervisor). A supervisor agent routes user queries to two specialized sub-agents:
+            - Research Agent: answers questions using Tavily web search
+            - Math Agent: performs calculations using add/subtract/multiply/divide tools
+
+            ## Key metrics
+
+            Routing Accuracy, Response Quality, Step Efficiency (Combined Score aggregates all three).
+
+            ## Where things live
+
+            - Eval files: evals/eval_supervisor.py, evals/eval_math_agent.py, evals/eval_research_agent.py
+            - Agent prompts and model config: src/config.py
+            - Supervisor logic: src/agents/deep_agent.py
+            - Scorers: scorers.py
+
+            Let production data drive what needs to change. When complete, ensure bt-flywheel-summary.json and bt-flywheel-narrative.md are both written to the working directory.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -83,13 +116,11 @@ jobs:
       - name: Detect code changes
         id: changes
         run: |
-          git add -- src/ evals/ scorers.py dataset.jsonl \
-            ':!bt-flywheel-summary.json' ':!bt-flywheel-narrative.md' ':!flywheel-output.log'
+          git add -- src/ evals/ scorers.py
           if git diff --cached --quiet; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
           else
             echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "Changed files:"
             git diff --cached --stat
           fi
 

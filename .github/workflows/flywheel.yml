@@ -45,6 +45,12 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
+      - name: Install Braintrust trace-claude-code plugin
+        run: |
+          sudo apt-get install -y -q jq
+          claude plugin marketplace add braintrustdata/braintrust-claude-plugin
+          claude plugin install trace-claude-code@braintrust-claude-plugin
+
       - name: Install bt-flywheel plugin skill
         run: |
           BASE="https://raw.githubusercontent.com/dpguthrie/braintrust-flywheel-plugin/main/skills/bt-flywheel"

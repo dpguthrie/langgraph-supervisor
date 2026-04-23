@@ -71,6 +71,8 @@ jobs:
           BRAINTRUST_GATEWAY_BASE_URL: "https://gateway.braintrust.dev/v1"
           CI: "true"
           FLYWHEEL_AUTONOMOUS: "true"
+          TRACE_TO_BRAINTRUST: "true"
+          BRAINTRUST_CC_PROJECT: "langgraph-supervisor-claude-code"
 
       - name: Detect code changes
         id: changes

@@ -41,7 +41,7 @@ jobs:
 
       - name: Install Braintrust CLI
         run: |
-          curl -fsSL https://bt.dev/cli/install.sh | sh
+          curl -fsSL https://bt.dev/cli/install.sh | bash
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 

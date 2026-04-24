@@ -99,7 +99,7 @@ def get_deep_agent(config: AgentConfig | None = None):
         tools=None,
         middleware=deepagent_middleware,
         state_schema=AgentState,
-    ).with_config({"recursion_limit": 25, "run_name": "Supervisor Agent"})
+    ).with_config({"recursion_limit": 50, "run_name": "Supervisor Agent"})
 
     return agent
 

@@ -2,8 +2,8 @@ name: Self-Improving Agent Flywheel
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 0 * * *"  # midnight UTC daily
+  # schedule:
+  #   - cron: "0 0 * * *"  # midnight UTC daily
 
 jobs:
   flywheel:

@@ -48,7 +48,7 @@ jobs:
       - name: Install Braintrust trace plugin
         run: |
           sudo apt-get update
-          sudo apt-get install -y -q jq
+          sudo apt-get install -y -q jq uuid-runtime
           claude plugin marketplace add braintrustdata/braintrust-claude-plugin
           claude plugin install trace-claude-code@braintrust-claude-plugin
 
@@ -71,6 +71,24 @@ jobs:
           BRAINTRUST_CC_PROJECT=langgraph-supervisor-claude-code
           TRACE_TO_BRAINTRUST=true
           EOF
+
+      - name: Configure Claude Code tracing
+        run: |
+          mkdir -p .claude
+          jq -n \
+            --arg api_key "$BRAINTRUST_API_KEY" \
+            --arg project "$BRAINTRUST_CC_PROJECT" \
+            '{
+              env: {
+                TRACE_TO_BRAINTRUST: "true",
+                BRAINTRUST_API_KEY: $api_key,
+                BRAINTRUST_CC_PROJECT: $project,
+                BRAINTRUST_CC_DEBUG: "true"
+              }
+            }' > .claude/settings.local.json
+        env:
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+          BRAINTRUST_CC_PROJECT: langgraph-supervisor-claude-code
 
       - name: Run flywheel optimization cycle
         id: flywheel
@@ -116,6 +134,7 @@ jobs:
           BRAINTRUST_GATEWAY_URL: https://gateway.braintrust.dev
           BRAINTRUST_GATEWAY_BASE_URL: https://gateway.braintrust.dev/v1
           BRAINTRUST_CC_PROJECT: langgraph-supervisor-claude-code
+          BRAINTRUST_CC_DEBUG: "true"
           TRACE_TO_BRAINTRUST: "true"
           CI: "true"
           FLYWHEEL_AUTONOMOUS: "true"
@@ -260,6 +279,17 @@ jobs:
             cat /tmp/narrative.md 2>/dev/null || echo "No narrative generated."
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Collect Braintrust trace debug logs
+        if: always()
+        run: |
+          mkdir -p flywheel-debug
+          if [ -f "$HOME/.claude/state/braintrust_hook.log" ]; then
+            cp "$HOME/.claude/state/braintrust_hook.log" flywheel-debug/braintrust_hook.log
+          fi
+          if [ -d "$HOME/.claude/state/braintrust_sessions" ]; then
+            cp -R "$HOME/.claude/state/braintrust_sessions" flywheel-debug/braintrust_sessions
+          fi
+
       - name: Upload run artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -269,5 +299,6 @@ jobs:
             bt-flywheel-summary.json
             bt-flywheel-narrative.md
             flywheel-output.log
+            flywheel-debug/**
           if-no-files-found: ignore
           retention-days: 30

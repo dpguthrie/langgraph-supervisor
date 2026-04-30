@@ -5,184 +5,42 @@ on:
   schedule:
     - cron: "0 0 * * *"  # midnight UTC daily
 
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-
 jobs:
   flywheel:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
+    uses: dpguthrie/braintrust-flywheel-plugin/.github/workflows/bt-flywheel-claude.yml@main
 
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    with:
+      project_name: langgraph-supervisor
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
+      system_context: |
+        This is a LangGraph multi-agent supervisor system. A supervisor agent routes user
+        queries to two specialized sub-agents:
+        - Research Agent: answers questions using Tavily web search
+        - Math Agent: performs calculations using add/subtract/multiply/divide tools
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: ".python-version"
+        ## Key metrics
+        Routing Accuracy, Response Quality, Step Efficiency (Combined Score aggregates all three).
 
-      - name: Install Python dependencies
-        run: uv sync
+        ## Where things live
+        - Eval files: evals/eval_supervisor.py, evals/eval_math_agent.py, evals/eval_research_agent.py
+        - Agent prompts and model config: src/config.py
+        - Supervisor logic: src/agents/deep_agent.py
+        - Scorers: scorers.py
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
+      code_paths: src/ evals/ scorers.py
+      act_mode: auto
+      base_branch: main
 
-      - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
+      extra_env: |
+        OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+        TAVILY_API_KEY=${{ secrets.TAVILY_API_KEY }}
+        BRAINTRUST_GATEWAY_URL=https://gateway.braintrust.dev
+        BRAINTRUST_GATEWAY_BASE_URL=https://gateway.braintrust.dev/v1
+        BRAINTRUST_CC_PROJECT=langgraph-supervisor-claude-code
+        TRACE_TO_BRAINTRUST=true
 
-      - name: Install Braintrust CLI
-        run: |
-          curl -fsSL https://bt.dev/cli/install.sh | bash
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      setup_python: true
+      python_version: "3.12"
+      python_install_cmd: uv sync
 
-      - name: Install Braintrust trace-claude-code plugin
-        run: |
-          sudo apt-get install -y -q jq
-          claude plugin marketplace add braintrustdata/braintrust-claude-plugin
-          claude plugin install trace-claude-code@braintrust-claude-plugin
-
-      - name: Install bt-flywheel plugin skill
-        run: |
-          BASE="https://raw.githubusercontent.com/dpguthrie/braintrust-flywheel-plugin/main/skills/bt-flywheel"
-          mkdir -p .claude/skills/bt-flywheel/references
-          curl -fsSL "${BASE}/SKILL.md" -o .claude/skills/bt-flywheel/SKILL.md
-          for f in bt-eval-patterns bt-functions-patterns bt-sql-patterns bt-view-patterns; do
-            curl -fsSL "${BASE}/references/${f}.md" \
-              -o ".claude/skills/bt-flywheel/references/${f}.md" 2>/dev/null || true
-          done
-
-      - name: Write .env for eval invocations
-        run: |
-          cat > .env << EOF
-          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
-          BRAINTRUST_API_KEY=${{ secrets.BRAINTRUST_API_KEY }}
-          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-          TAVILY_API_KEY=${{ secrets.TAVILY_API_KEY }}
-          BRAINTRUST_DEFAULT_PROJECT=langgraph-supervisor
-          BRAINTRUST_GATEWAY_URL=https://gateway.braintrust.dev
-          BRAINTRUST_GATEWAY_BASE_URL=https://gateway.braintrust.dev/v1
-          EOF
-
-      - name: Run flywheel optimization cycle
-        id: flywheel
-        run: |
-          claude --print --dangerously-skip-permissions \
-            -p "$FLYWHEEL_PROMPT" \
-            2>&1 | tee flywheel-output.log
-        env:
-          FLYWHEEL_PROMPT: |
-            Invoke the Skill tool with skill='bt-flywheel' to run the full self-improvement optimization cycle in autonomous CI mode.
-
-            ## System context
-
-            This is a LangGraph multi-agent supervisor system (Braintrust project: langgraph-supervisor). A supervisor agent routes user queries to two specialized sub-agents:
-            - Research Agent: answers questions using Tavily web search
-            - Math Agent: performs calculations using add/subtract/multiply/divide tools
-
-            ## Key metrics
-
-            Routing Accuracy, Response Quality, Step Efficiency (Combined Score aggregates all three).
-
-            ## Where things live
-
-            - Eval files: evals/eval_supervisor.py, evals/eval_math_agent.py, evals/eval_research_agent.py
-            - Agent prompts and model config: src/config.py
-            - Supervisor logic: src/agents/deep_agent.py
-            - Scorers: scorers.py
-
-            Let production data drive what needs to change. When complete, ensure bt-flywheel-summary.json and bt-flywheel-narrative.md are both written to the working directory.
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-          BRAINTRUST_DEFAULT_PROJECT: "langgraph-supervisor"
-          BRAINTRUST_GATEWAY_URL: "https://gateway.braintrust.dev"
-          BRAINTRUST_GATEWAY_BASE_URL: "https://gateway.braintrust.dev/v1"
-          CI: "true"
-          FLYWHEEL_AUTONOMOUS: "true"
-          TRACE_TO_BRAINTRUST: "true"
-          BRAINTRUST_CC_PROJECT: "langgraph-supervisor-claude-code"
-
-      - name: Detect code changes
-        id: changes
-        run: |
-          git add -- src/ evals/ scorers.py
-          if git diff --cached --quiet; then
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-          else
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            git diff --cached --stat
-          fi
-
-      - name: Prepare narrative
-        id: narrative
-        if: always()
-        run: |
-          # The skill writes bt-flywheel-narrative.md directly while it has full context.
-          # Fall back to the summary JSON if for some reason the narrative wasn't written.
-          if [ -f bt-flywheel-narrative.md ]; then
-            cp bt-flywheel-narrative.md /tmp/narrative.md
-          elif [ -f bt-flywheel-summary.json ]; then
-            echo "*(Narrative not generated — see bt-flywheel-summary.json artifact)*" > /tmp/narrative.md
-            echo "" >> /tmp/narrative.md
-            cat bt-flywheel-summary.json >> /tmp/narrative.md
-          else
-            echo "No narrative or summary generated." > /tmp/narrative.md
-          fi
-
-      - name: Create pull request
-        if: steps.changes.outputs.has_changes == 'true'
-        run: |
-          DATE=$(date -u +%Y-%m-%d)
-          BRANCH="flywheel/${DATE}-$(date -u +%H%M%S)"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
-          git commit -m "chore(flywheel): automated agent optimization ${DATE}"
-          git push origin "$BRANCH"
-
-          gh pr create \
-            --title "Flywheel: Agent optimizations (${DATE})" \
-            --body-file /tmp/narrative.md \
-            --base main \
-            --head "$BRANCH"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Write job summary
-        if: always()
-        run: |
-          {
-            if [ "${{ steps.changes.outputs.has_changes }}" = "true" ]; then
-              echo "## Flywheel Run — Changes Made"
-              echo ""
-              echo "A pull request has been opened with the proposed optimizations."
-            else
-              echo "## Flywheel Run — No Changes Recommended"
-            fi
-            echo ""
-            cat /tmp/narrative.md 2>/dev/null || echo "No narrative generated."
-          } >> $GITHUB_STEP_SUMMARY
-
-      - name: Upload run artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: flywheel-${{ github.run_id }}
-          path: |
-            bt-flywheel-summary.json
-            bt-flywheel-narrative.md
-            flywheel-output.log
-          if-no-files-found: ignore
-          retention-days: 30
+    secrets: inherit

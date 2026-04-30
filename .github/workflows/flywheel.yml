@@ -221,6 +221,16 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
           git commit -m "chore(flywheel): automated agent optimization ${DATE}"
+          git fetch origin main
+          git rebase origin/main
+
+          if git diff --name-only origin/main...HEAD | grep -Eq '^\.github/workflows/'; then
+            echo "Refusing to push PR branch because it changes GitHub workflow files."
+            echo "The default GITHUB_TOKEN cannot create or update workflow files without workflows permission."
+            echo "Open those workflow changes manually, or use a token with workflows permission."
+            exit 1
+          fi
+
           git push origin "$BRANCH"
 
           gh pr create \

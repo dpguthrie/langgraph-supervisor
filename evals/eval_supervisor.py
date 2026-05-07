@@ -297,17 +297,20 @@ class StepEfficiencyScorer(BaseModel):
 async def step_efficiency_scorer(output):
     """
     Scores based on the number of steps (messages/tool calls) taken.
-    - output: dict containing the 'messages' list.
-    - max_steps: maximum reasonable number of steps for full score.
-    Returns a score between 0 and 1.
+
+    MAX_STEPS=6 covers a single delegation (4 messages) and a full hybrid
+    Research→Math chain (6 messages). Above SOFT_LIMIT the agent is looping
+    or over-routing.
     """
-    MAX_STEPS = 8
+    MAX_STEPS = 6
+    SOFT_LIMIT = 12
     messages = output.get("messages", [])
     num_steps = len(messages)
     if num_steps <= MAX_STEPS:
         return 1.0
-    # Linearly penalize extra steps
-    return max(0.0, 1.0 - (num_steps - MAX_STEPS) / MAX_STEPS)
+    if num_steps >= SOFT_LIMIT:
+        return 0.0
+    return 1.0 - (num_steps - MAX_STEPS) / (SOFT_LIMIT - MAX_STEPS)
 
 
 saved_parameters = load_parameters(

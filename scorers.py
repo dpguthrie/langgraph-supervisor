@@ -7,13 +7,17 @@ class StepEfficiencyScorer(BaseModel):
 
 
 async def step_efficiency_scorer(output):
-    MAX_STEPS = 8
+    # MAX_STEPS=6 covers single-delegation (4 msgs) and hybrid Research→Math (6 msgs).
+    # Above SOFT_LIMIT, the agent is looping or over-routing → score 0.
+    MAX_STEPS = 6
+    SOFT_LIMIT = 12
     messages = output.get("messages", [])
     num_steps = len(messages)
     if num_steps <= MAX_STEPS:
         return 1.0
-
-    return max(0.0, 1.0 - (num_steps - MAX_STEPS) / MAX_STEPS)
+    if num_steps >= SOFT_LIMIT:
+        return 0.0
+    return 1.0 - (num_steps - MAX_STEPS) / (SOFT_LIMIT - MAX_STEPS)
 
 
 project = braintrust.projects.create(name="langgraph-supervisor")

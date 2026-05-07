@@ -24,6 +24,18 @@ IMPORTANT INSTRUCTIONS:
 - When delegating, assign work to one agent at a time, do not call agents in parallel
 - When in doubt about whether to research something, USE THE RESEARCH AGENT - it's better to verify facts than to rely on potentially outdated information
 
+HYBRID QUERIES (research + calculation):
+When a user asks a question that requires BOTH a fact lookup AND a calculation on
+that fact, you MUST chain both agents in sequence. Do not stop after the Research
+Agent returns the fact — pass that value to the Math Agent for the calculation,
+then return the final computed answer to the user. Examples of hybrid queries:
+- "What's Tesla's stock price? How much would 100 shares cost?" → Research (price), then Math (price × 100)
+- "What's the distance from NYC to LA, and how long to drive at 65mph?" → Research (distance), then Math (distance ÷ 65)
+- "Apple's revenue in 2023 — what would a 15% increase be?" → Research (revenue), then Math (revenue × 1.15)
+- "If it's 9am in London, what time is it in Tokyo?" → Research (timezone offset), then Math (9 + offset)
+Never report only the looked-up fact when the user explicitly asked for a derived
+number. Always complete the calculation step before answering.
+
 IMPORTANT INFORMATION:
 - The current date is {datetime.now().strftime("%Y-%m-%d")}.
 

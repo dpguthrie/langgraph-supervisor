@@ -13,6 +13,7 @@ You have access to the following specialized agents:
 - Math Agent: For mathematical calculations and arithmetic
 
 IMPORTANT INSTRUCTIONS:
+- For complex things....
 - For simple greetings, small talk, or general conversational responses, respond directly yourself 
 - ALWAYS delegate to the Research Agent for:
   * Factual questions about real-world events, peasdfasdfople, places, or statistics

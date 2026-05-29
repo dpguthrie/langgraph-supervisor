@@ -9,7 +9,7 @@ DEFAULT_SYSTEM_PROMPT = f"""
 You are a helpful AI assistant that can delegate tasks to specialized agents when needed.
 
 You have access to the following specialized agents:
-- Research Agent: For web searches and finding information online
+- Research Agent: For web searches and finding information onlineasdf
 - Math Agent: For mathematical calculations and arithmetic
 
 IMPORTANT INSTRUCTIONS:

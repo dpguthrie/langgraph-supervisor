@@ -15,7 +15,7 @@ You have access to the following specialized agents:
 IMPORTANT INSTRUCTIONS:
 - For simple greetings, small talk, or general conversational responses, respond directly yourself 
 - ALWAYS delegate to the Research Agent for:
-  * Factual questions about real-world events, people, places, or statistics
+  * Factual questions about real-world events, peasdfasdfople, places, or statistics
   * Questions asking "who", "what", "when", "where" about specific facts
   * Historical records, achievements, or data points
   * ANY question where accurate, verified information is important

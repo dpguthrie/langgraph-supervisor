@@ -1,5 +1,6 @@
 """Saved Braintrust parameter definitions for evals."""
 
+import os
 from typing import Any, cast
 
 from braintrust import EvalParameters, projects
@@ -15,7 +16,7 @@ from src.config import (
     DEFAULT_SYSTEM_PROMPT,
 )
 
-PROJECT_NAME = "langgraph-supervisor"
+PROJECT_NAME = os.environ["BRAINTRUST_PROJECT_NAME"]
 SUPERVISOR_EVAL_PARAMETERS_NAME = "Supervisor Eval Config"
 SUPERVISOR_EVAL_PARAMETERS_SLUG = "supervisor-eval-config"
 
@@ -33,14 +34,20 @@ MATH_AGENT_PROMPT_PARAM = "math_agent_prompt"
 def _extract_message_content(message: Any) -> str:
     """Extract text content from a prompt message payload."""
     message_content = (
-        message.get("content") if isinstance(message, dict) else getattr(message, "content", None)
+        message.get("content")
+        if isinstance(message, dict)
+        else getattr(message, "content", None)
     )
     if isinstance(message_content, str):
         return message_content
     if isinstance(message_content, list):
         text_parts: list[str] = []
         for part in message_content:
-            text = part.get("text") if isinstance(part, dict) else getattr(part, "text", None)
+            text = (
+                part.get("text")
+                if isinstance(part, dict)
+                else getattr(part, "text", None)
+            )
             if isinstance(text, str):
                 text_parts.append(text)
         return "\n".join(text_parts)
@@ -65,7 +72,9 @@ def parse_prompt_param(prompt: Prompt | dict[str, Any]) -> tuple[str, str | None
         raise ValueError(f"Prompt parameter '{prompt_name}' is empty")
 
     prompt_type = (
-        prompt_block.get("type") if isinstance(prompt_block, dict) else getattr(prompt_block, "type", None)
+        prompt_block.get("type")
+        if isinstance(prompt_block, dict)
+        else getattr(prompt_block, "type", None)
     )
     if prompt_type == "completion":
         content = (

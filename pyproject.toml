@@ -37,11 +37,11 @@ dependencies = [
     "langchain-anthropic<1.4.0",
     "deepagents<0.4.0",
     "python-dotenv>=1.1.1",
-    "braintrust==0.10.0",
+    "braintrust==0.24.0",
     "braintrust-langchain<0.3.0",
     "rich>=14.2.0",
     "autoevals<0.1.0",
-    "modal>=1.2.0",
+    "modal~=1.4.0",
     "fastapi[standard]>=0.119.1",
     "ipython>=9.6.0",
 ]

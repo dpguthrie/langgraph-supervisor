@@ -4,24 +4,18 @@ Minimal supervisor eval that compares multiple Gateway-routed models.
 
 import os
 import re
-import sys
-from pathlib import Path
 from typing import Any
 
-project_root = Path(__file__).resolve().parents[1]
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+from braintrust import Eval, init_dataset, init_function
+from braintrust_langchain import BraintrustCallbackHandler
+from dotenv import load_dotenv
 
-from braintrust import Eval, init_dataset, init_function  # noqa: E402
-from braintrust_langchain import BraintrustCallbackHandler  # noqa: E402
-from dotenv import load_dotenv  # noqa: E402
-
-from src.agents.deep_agent import get_supervisor  # noqa: E402
-from src.config import AgentConfig  # noqa: E402
+from src.agents.deep_agent import get_supervisor
+from src.config import AgentConfig
 
 load_dotenv()
 
-PROJECT_NAME = "langgraph-supervisor"
+PROJECT_NAME = os.environ["BRAINTRUST_PROJECT_NAME"]
 DATASET_NAME = "Supervisor Agent Dataset"
 
 GATEWAY_BASE_URL = os.getenv(

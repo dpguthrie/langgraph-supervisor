@@ -1,3 +1,5 @@
+import os
+
 import braintrust
 from pydantic import BaseModel
 
@@ -16,7 +18,7 @@ async def step_efficiency_scorer(output):
     return max(0.0, 1.0 - (num_steps - MAX_STEPS) / MAX_STEPS)
 
 
-project = braintrust.projects.create(name="langgraph-supervisor")
+project = braintrust.projects.create(name=os.environ["BRAINTRUST_PROJECT_NAME"])
 
 project.scorers.create(
     name="Step Efficiency (Bundled)",

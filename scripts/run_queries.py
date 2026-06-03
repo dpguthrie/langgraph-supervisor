@@ -5,7 +5,6 @@ import json
 import os
 import random
 import sys
-from pathlib import Path
 from typing import List, Optional
 
 from braintrust import init_logger
@@ -15,11 +14,6 @@ from langchain.chat_models import init_chat_model  # type: ignore
 from langchain_core.messages import HumanMessage  # type: ignore
 
 from src.config import AgentConfig
-
-# Add project root to path
-project_root = Path(__file__).resolve().parents[1]
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
 
 load_dotenv()
 
@@ -129,7 +123,7 @@ async def run_question(question: str) -> tuple[str, bool, Optional[dict]]:
     """
     try:
         # Import supervisor getter inside function
-        from src.agent_graph import get_supervisor  # noqa: E402
+        from src.agents.deep_agent import get_supervisor  # noqa: E402
 
         # Randomly select model for this question
         selected_model = random.choice(MODEL_POOL)
@@ -237,7 +231,8 @@ def main(logger=None):
     # Initialize tracing - set global handler BEFORE creating agents
     if logger is None:
         logger = init_logger(
-            project="langgraph-supervisor", api_key=os.environ.get("BRAINTRUST_API_KEY")
+            project=os.environ["BRAINTRUST_PROJECT_NAME"],
+            api_key=os.environ.get("BRAINTRUST_API_KEY"),
         )
     set_global_handler(BraintrustCallbackHandler(logger=logger))
 

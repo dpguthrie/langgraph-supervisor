@@ -32,7 +32,7 @@ def main():
 
     # Initialize Braintrust logging for the session
     logger = braintrust.init_logger(
-        project="langgraph-supervisor",
+        project=os.environ["BRAINTRUST_PROJECT_NAME"],
     )
 
     # Create callback handler for tracing

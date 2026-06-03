@@ -72,7 +72,25 @@ def braintrust_eval_server():
 
     # Use Braintrust's built-in create_app which handles all the setup
     # This creates a Starlette ASGI app with routes, middleware, etc.
-    return create_app(evaluators, org_name=None)
+    app = create_app(evaluators, org_name=None)
+
+    # Modal's ASGI runtime delivers scope["headers"] as bytearray pairs, but
+    # Braintrust's CORS middleware does dict(scope["headers"]) which requires
+    # hashable (bytes) keys -> "TypeError: unhashable type: 'bytearray'".
+    # Coerce headers to bytes before the middleware stack runs.
+    return _coerce_header_bytes(app)
+
+
+def _coerce_header_bytes(app):
+    async def wrapped(scope, receive, send):
+        if scope.get("type") in ("http", "websocket") and "headers" in scope:
+            scope = {
+                **scope,
+                "headers": [(bytes(k), bytes(v)) for k, v in scope["headers"]],
+            }
+        await app(scope, receive, send)
+
+    return wrapped
 
 
 # Optional: Add a local entrypoint for testing

@@ -4,24 +4,15 @@ Run this file to execute basic evaluations.
 """
 
 import os
-import sys
-from pathlib import Path
 from typing import Any, Literal, Optional
 
-# Ensure project root is on sys.path so `src` package can be imported
-project_root = Path(__file__).resolve().parents[1]
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+from autoevals import LLMClassifier
+from braintrust import Eval, init_dataset, load_parameters
+from braintrust_langchain import BraintrustCallbackHandler
+from pydantic import BaseModel
 
-from autoevals import LLMClassifier  # noqa: E402
-from braintrust import Eval, init_dataset, load_parameters  # noqa: E402
-from braintrust.oai import wrap_openai  # noqa: E402
-from braintrust_langchain import BraintrustCallbackHandler  # noqa: E402
-from dotenv import load_dotenv  # noqa: E402
-from openai import AsyncOpenAI  # noqa: E402
-from pydantic import BaseModel  # noqa: E402
-
-from evals.parameters import (  # noqa: E402
+from evals.judge_client import judge_client
+from evals.parameters import (
     MATH_AGENT_PROMPT_PARAM,
     PROJECT_NAME,
     RESEARCH_AGENT_PROMPT_PARAM,
@@ -31,19 +22,8 @@ from evals.parameters import (  # noqa: E402
 )
 
 # Import our supervisor system
-from src.agents.deep_agent import get_supervisor  # noqa: E402
-from src.config import AgentConfig  # noqa: E402
-from src.llm import DEFAULT_BRAINTRUST_GATEWAY_URL  # noqa: E402
-
-load_dotenv()
-
-
-client = wrap_openai(
-    AsyncOpenAI(
-        api_key=os.getenv("BRAINTRUST_API_KEY"),
-        base_url=os.getenv("BRAINTRUST_GATEWAY_URL", DEFAULT_BRAINTRUST_GATEWAY_URL),
-    )
-)
+from src.agents.deep_agent import get_supervisor
+from src.config import AgentConfig
 
 
 def unwrap_parameters(params: dict) -> dict:
@@ -240,7 +220,7 @@ async def routing_accuracy_scorer(input, output, expected, metadata, trace):
     prompt = ROUTING_ACCURACY_PROMPT.format(
         input=input, agents_called=agents_called_str
     )
-    response = await client.responses.parse(
+    response = await judge_client.responses.parse(
         model="gpt-4o-mini",
         input=[{"role": "user", "content": prompt}],
         text_format=RoutingAccuracyOutput,
@@ -286,6 +266,7 @@ response_quality_scorer = LLMClassifier(
     choice_scores={"EXCELLENT": 1.0, "GOOD": 0.75, "FAIR": 0.5, "POOR": 0.0},
     use_cot=True,
     model="gpt-4o",
+    client=judge_client,
 )
 
 
@@ -324,7 +305,10 @@ def get_dataset(
     dataset_name = os.getenv("EVAL_DATASET", dataset_name)
     tag = os.getenv("EVAL_TAG", tag)
 
-    kwargs: dict[str, Any] = {"project": "langgraph-supervisor", "name": dataset_name}
+    kwargs: dict[str, Any] = {
+        "project": os.environ["BRAINTRUST_PROJECT_NAME"],
+        "name": dataset_name,
+    }
     if tag:
         kwargs["_internal_btql"] = {"filter": {"btql": f"tags INCLUDES '{tag}'"}}
     return init_dataset(**kwargs)
@@ -332,7 +316,7 @@ def get_dataset(
 
 # Basic evaluation
 Eval(
-    "langgraph-supervisor",
+    os.environ["BRAINTRUST_PROJECT_NAME"],
     data=get_dataset(),
     task=run_supervisor_task,
     scores=[

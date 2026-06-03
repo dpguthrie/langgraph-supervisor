@@ -2,6 +2,7 @@
 Research Agent evaluation - focused on web search and information retrieval.
 """
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -16,6 +17,7 @@ from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, load_parameters  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
+from evals.judge_client import judge_client  # noqa: E402
 from evals.parameters import (  # noqa: E402
     PROJECT_NAME,
     RESEARCH_AGENT_EVAL_PARAMETERS_SLUG,
@@ -212,12 +214,13 @@ answer_quality_scorer = LLMClassifier(
     choice_scores={"EXCELLENT": 1.0, "GOOD": 0.75, "FAIR": 0.5, "POOR": 0.0},
     use_cot=True,
     model="gpt-4o",
+    client=judge_client,
 )
 
 
 # Evaluation
 Eval(
-    "langgraph-supervisor",
+    os.environ["BRAINTRUST_PROJECT_NAME"],
     experiment_name="research-agent",
     data=RESEARCH_TEST_DATA,  # type: ignore
     task=run_research_task,

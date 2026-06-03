@@ -2,6 +2,7 @@
 Math Agent evaluation - focused on calculation accuracy and tool usage.
 """
 
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, load_parameters  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
+from evals.judge_client import judge_client  # noqa: E402
 from evals.parameters import (  # noqa: E402
     MATH_AGENT_EVAL_PARAMETERS_SLUG,
     MATH_AGENT_PROMPT_PARAM,
@@ -240,12 +242,13 @@ calculation_correctness_scorer = LLMClassifier(
     choice_scores={"CORRECT": 1.0, "INCORRECT": 0.0},
     use_cot=True,
     model="gpt-4o",
+    client=judge_client,
 )
 
 
 # Evaluation
 Eval(
-    "langgraph-supervisor",
+    os.environ["BRAINTRUST_PROJECT_NAME"],
     experiment_name="math-agent",
     data=MATH_TEST_DATA,  # type: ignore
     task=run_math_task,

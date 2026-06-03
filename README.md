@@ -350,7 +350,7 @@ agents=[research_agent, math_agent, new_agent]
 
 ### Adding Evaluation Tests
 
-Extend the evaluation dataset in `evals/eval_simple.py`:
+Add rows to the **Supervisor Agent Dataset** in Braintrust (or extend inline data in `evals/eval_math_agent.py` / `evals/eval_research_agent.py`):
 
 ```python
 {

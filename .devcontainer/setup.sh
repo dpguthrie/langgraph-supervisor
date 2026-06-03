@@ -27,7 +27,7 @@ fi
 
 if ! command -v bt >/dev/null 2>&1; then
   echo "[devcontainer] installing Braintrust CLI"
-  curl -fsSL https://bt.dev/cli/install.sh | sh
+  curl -fsSL https://bt.dev/cli/install.sh | bash
 fi
 
 if command -v bt >/dev/null 2>&1 && bt setup skills --help >/dev/null 2>&1; then

@@ -80,16 +80,18 @@ Always pass `--non-interactive` to avoid interactive prompts.
 
 ### Running Evaluations
 
-The `braintrust eval` CLI authenticates before the eval script's `load_dotenv()` runs, so you must source `.env` into the shell first:
+`load_dotenv()` in eval files does not run before the CLI starts the Python runner. Provide env vars via **`--env-file .env`** (`bt eval`) or **`set -a && source .env && set +a`** (`braintrust eval`).
+
+LLM judges use `evals/judge_client.py` (`BRAINTRUST_API_KEY` + gateway). Do not rely on autoevals' default client, which prefers `OPENAI_API_KEY`.
 
 ```bash
-# Always source .env before running evals (never inline the key in the command)
+# bt CLI — load .env in the command
+bt eval evals/eval_supervisor.py --env-file .env
+bt eval evals/ --env-file .env
+
+# braintrust Python CLI — source .env first
 set -a && source .env && set +a
-
-# Run all evals
 .venv/bin/braintrust eval evals/
-
-# Run specific eval
 .venv/bin/braintrust eval evals/eval_supervisor.py
 ```
 

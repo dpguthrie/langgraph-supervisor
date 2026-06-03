@@ -109,8 +109,11 @@ Create a `.env` file in the project root:
 OPENAI_API_KEY=your_openai_api_key_here
 TAVILY_API_KEY=your_tavily_api_key_here
 BRAINTRUST_API_KEY=your_braintrust_api_key_here
+BRAINTRUST_PROJECT_NAME=langgraph-supervisor
 ENDPOINT_AUTH_TOKEN=your_long_random_token
 ```
+
+Copy from `.env.example` and fill in real values. Agents and LLM judges route through the Braintrust gateway using `BRAINTRUST_API_KEY`.
 
 ### 4. Run the Application (choose one)
 
@@ -173,13 +176,44 @@ This project includes a comprehensive evaluation framework using **LLM-as-a-Judg
 
 ### Running Evaluations Locally
 
-```bash
-# Run the evaluation suite locally
-braintrust eval evals/
+Eval scripts read `BRAINTRUST_PROJECT_NAME` and `BRAINTRUST_API_KEY` from the environment. `load_dotenv()` in eval files does not run before the Braintrust CLI starts the runner, so pass a `.env` file or export variables in your shell.
 
-# Or run with dev server (for playground testing)
-braintrust eval evals/eval_simple.py --dev
+**Option A — Braintrust CLI (`braintrust` from the Python package):**
+
+```bash
+set -a && source .env && set +a
+
+# Run all evals
+uv run braintrust eval evals/
+
+# Run one eval
+uv run braintrust eval evals/eval_supervisor.py
+
+# Dev server for playground / remote parameter experiments
+uv run braintrust eval evals/eval_supervisor.py --dev
 ```
+
+**Option B — `bt` CLI (Braintrust `bt` installer):**
+
+```bash
+# Load .env in the same command (recommended)
+bt eval evals/eval_supervisor.py --env-file .env
+
+# All eval files
+bt eval evals/ --env-file .env
+
+# Smoke test (first row only)
+bt eval evals/eval_supervisor.py --env-file .env --first 1
+```
+
+**Dataset filters** (supervisor eval):
+
+```bash
+EVAL_TAG=classic bt eval evals/eval_supervisor.py --env-file .env
+EVAL_DATASET="Supervisor Agent Dataset" bt eval evals/eval_supervisor.py --env-file .env
+```
+
+Available eval files: `eval_supervisor.py`, `eval_math_agent.py`, `eval_research_agent.py`, `eval_gateway_model_matrix.py`.
 
 ### Remote Eval Server on Modal
 
@@ -239,7 +273,11 @@ langgraph-supervisor/
 │   │   └── tracing.py           # Braintrust tracing utilities
 │   └── __init__.py
 ├── evals/                       # Evaluation framework
-│   └── eval_simple.py          # LLM-as-a-Judge evaluations with parameters
+│   ├── eval_supervisor.py      # Supervisor routing, response quality, efficiency
+│   ├── eval_math_agent.py      # Math agent tool usage and correctness
+│   ├── eval_research_agent.py  # Research agent search and answer quality
+│   ├── judge_client.py         # Braintrust gateway client for LLM judges
+│   └── parameters.py           # Saved Braintrust eval parameters
 ├── docs/                        # Documentation
 │   └── MODAL_EVAL_SERVER.md    # Guide for Modal eval server deployment
 ├── requirements.txt             # Python dependencies

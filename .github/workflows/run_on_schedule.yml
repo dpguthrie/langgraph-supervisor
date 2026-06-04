@@ -29,5 +29,6 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          BRAINTRUST_PROJECT_NAME: ${{ secrets.BRAINTRUST_PROJECT_NAME }}
         run: |
           uv run python scripts/run_queries.py

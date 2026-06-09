@@ -57,6 +57,5 @@
   },
   "postAttachCommand": "bash .devcontainer/post-attach.sh",
   "postCreateCommand": "bash .devcontainer/setup.sh",
-  "remoteUser": "vscode",
-  "waitFor": "postCreateCommand"
+  "remoteUser": "vscode"
 }

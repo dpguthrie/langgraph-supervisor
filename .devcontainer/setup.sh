@@ -55,6 +55,6 @@ fi
 
 if command -v bt >/dev/null 2>&1 && bt setup skills --help >/dev/null 2>&1; then
   if command -v claude >/dev/null 2>&1; then
-    run_optional "configuring Braintrust skills for Claude if credentials are available" bt setup skills --agent claude --global --no-input --no-workflow
+    run_optional "configuring Braintrust skills for Claude if credentials are available" bt setup skills --agent claude --global --no-input
   fi
 fi

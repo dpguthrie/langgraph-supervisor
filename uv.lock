@@ -279,7 +279,7 @@ wheels = [
 [[package]]
 name = "braintrust"
 version = "0.24.0"
-source = { git = "https://github.com/braintrustdata/braintrust-sdk-python?subdirectory=py&rev=main#daecaa8dbbdeb03c8f5ad78c563aae95b43da081" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "chevron" },
     { name = "exceptiongroup" },
@@ -292,6 +292,10 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
     { name = "wrapt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/68/ca/b66e2177743a19aec83aa29dbe1e4179be437fce9f8f38cc9bc1148bf72e/braintrust-0.24.0.tar.gz", hash = "sha256:c4e39822d63ef9d43948ef846d7fe9d954228a5c7f77f4b84224a1402ec59451", size = 648298, upload-time = "2026-06-03T16:49:02.943Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/be/da41f8263b847b91ecd1053d2a4cea2bfcc87f0efe199d22470a57133e28/braintrust-0.24.0-py3-none-any.whl", hash = "sha256:be62f90f4ac81a6686b6a3f46c879f6fa8bb113a5c069bcf234d09cd7b1eee91", size = 757817, upload-time = "2026-06-03T16:49:01.362Z" },
 ]
 
 [[package]]
@@ -1577,7 +1581,7 @@ dev = [
 requires-dist = [
     { name = "autoevals", specifier = "<0.1.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=24.0.0" },
-    { name = "braintrust", git = "https://github.com/braintrustdata/braintrust-sdk-python?subdirectory=py&rev=main" },
+    { name = "braintrust", specifier = "==0.24.0" },
     { name = "braintrust-langchain", specifier = "<0.3.0" },
     { name = "deepagents", specifier = "<0.4.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.119.1" },

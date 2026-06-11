@@ -97,6 +97,3 @@ python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
-
-[tool.uv.sources]
-braintrust = { git = "https://github.com/braintrustdata/braintrust-sdk-python", subdirectory = "py", rev = "main" }

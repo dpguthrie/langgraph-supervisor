@@ -65,6 +65,7 @@
     }
   },
   "postAttachCommand": "bash .devcontainer/post-attach.sh",
-  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "updateContentCommand": "bash .devcontainer/prebuild.sh",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
   "remoteUser": "vscode"
 }

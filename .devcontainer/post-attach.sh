@@ -7,6 +7,8 @@ cd "$REPO_ROOT"
 
 if [ -f .env ]; then
   echo "[devcontainer] .env detected"
+elif [ "${CODESPACES:-}" = "true" ]; then
+  echo "[devcontainer] .env missing; using Codespaces secrets if configured"
 else
   echo "[devcontainer] .env missing; copy values into .env or set Codespaces secrets"
 fi

@@ -1,0 +1,2 @@
+dotenv_if_exists .env
+export BRAINTRUST_ENV_FILE="$PWD/.env"

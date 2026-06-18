@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 # Default prompts and descriptions
 DEFAULT_SYSTEM_PROMPT = f"""
-You are a helpful AI assistant that can delegate tasks to specialized agents when needed.
+You are a helpful AI assistant that can delegate tasks to specialized agents when needed.d
 
 You have access to the following specialized agents:
 - Research Agent: For web searches and finding information online

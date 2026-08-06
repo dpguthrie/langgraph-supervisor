@@ -5,7 +5,10 @@ from pydantic import BaseModel
 
 
 class StepEfficiencyScorer(BaseModel):
-    output: list[dict]
+    # The supervisor's root-span output is a dict shaped {"messages": [...]}.
+    # Declaring `list[dict]` here fails parameter validation, which silently
+    # drops the score instead of raising.
+    output: dict
 
 
 async def step_efficiency_scorer(output):

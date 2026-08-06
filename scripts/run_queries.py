@@ -9,7 +9,7 @@ import sys
 from typing import List, Optional
 
 from braintrust import init_logger
-from braintrust_langchain import BraintrustCallbackHandler, set_global_handler
+from braintrust_langchain import BraintrustCallbackHandler
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model  # type: ignore
 from langchain_core.messages import HumanMessage  # type: ignore
@@ -247,7 +247,7 @@ def generate_questions(num_questions: int, seed: Optional[int] = None) -> List[s
     return questions[:num_questions]
 
 
-async def run_question(question: str) -> tuple[str, bool, Optional[dict]]:
+async def run_question(question: str, logger) -> tuple[str, bool, Optional[dict]]:
     """Run a question through the supervisor with a random model.
 
     Returns:
@@ -263,18 +263,26 @@ async def run_question(question: str) -> tuple[str, bool, Optional[dict]]:
         print(f"📥 Running: {question}")
 
         # Create config with selected model for all agents
-        config = AgentConfig(
+        agent_config = AgentConfig(
             supervisor_model=selected_model,
             research_model=selected_model,
             math_model=selected_model,
         )
 
         # Get supervisor with this config (builds fresh, no caching)
-        supervisor = get_supervisor(config)
+        supervisor = get_supervisor(agent_config)
 
+        # One callback handler per invocation. The handler holds per-run span
+        # state (self.spans, self.root_run_id) and sets contextvars, so sharing
+        # a single instance across concurrent runs crosses their span trees and
+        # loses writes. Metadata must go inside `config` -- LangGraph ignores it
+        # as a bare ainvoke kwarg.
         result = await supervisor.ainvoke(
             {"messages": [HumanMessage(content=question)]},
-            metadata={"customer_id": f"customer_{random.randint(1000, 9999)}"},
+            config={
+                "callbacks": [BraintrustCallbackHandler(logger=logger)],
+                "metadata": {"customer_id": f"customer_{random.randint(1000, 9999)}"},
+            },
         )
         messages = result.get("messages", []) if isinstance(result, dict) else []
 
@@ -290,7 +298,7 @@ async def run_question(question: str) -> tuple[str, bool, Optional[dict]]:
         return question, False, None
 
 
-async def main_async(args):
+async def main_async(args, logger):
     """Run questions through the supervisor concurrently."""
     # Check required environment variables
     if not os.environ.get("BRAINTRUST_API_KEY"):
@@ -315,7 +323,7 @@ async def main_async(args):
     # Process in batches to limit concurrency
     for i in range(0, len(questions), args.concurrency):
         batch = questions[i : i + args.concurrency]
-        tasks = [run_question(q) for q in batch]
+        tasks = [run_question(q, logger) for q in batch]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for result in results:
@@ -360,17 +368,17 @@ def main(logger=None):
     )
     args = parser.parse_args()
 
-    # Initialize tracing - set global handler BEFORE creating agents
+    # Initialize tracing. Each question builds its own callback handler in
+    # run_question rather than registering one globally.
     if logger is None:
         logger = init_logger(
             project=os.environ["BRAINTRUST_PROJECT_NAME"],
             api_key=os.environ.get("BRAINTRUST_API_KEY"),
         )
-    set_global_handler(BraintrustCallbackHandler(logger=logger))
 
     # Run async main
     try:
-        asyncio.run(main_async(args))
+        asyncio.run(main_async(args, logger))
     finally:
         # Flush logger to ensure traces are sent to Braintrust
         print("\nFlushing traces to Braintrust...")

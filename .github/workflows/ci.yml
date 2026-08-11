@@ -1,11 +1,15 @@
-name: Run Python evals
+name: Braintrust eval gate
 
 on:
+  pull_request:
   push:
-    paths:
-      - "evals/**"
-      - "src/agents/**"
-      - "src/config.py"
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: braintrust-evals-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   pull-requests: write
@@ -13,8 +17,9 @@ permissions:
 
 jobs:
   eval:
-    name: Run evals
+    name: Combined Score regression gate
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -37,15 +42,20 @@ jobs:
         run: |
           uv sync
 
-      - name: Run Evals
-        uses: braintrustdata/eval-action@v1
+      - name: Run evals and enforce score gate
+        uses: braintrustdata/eval-action@v2
         env:
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+          BRAINTRUST_PROJECT_NAME: ${{ secrets.BRAINTRUST_PROJECT_NAME }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          BRAINTRUST_CI_GATE_SCORE: Combined Score
+          BRAINTRUST_CI_MAX_REGRESSIONS: "0"
         with:
           api_key: ${{ secrets.BRAINTRUST_API_KEY }}
           runtime: python
           package_manager: uv
           root: evals
-          paths: eval_supervisor.py
+          paths: >-
+            eval_supervisor.py
+            eval_ci_reporter.py

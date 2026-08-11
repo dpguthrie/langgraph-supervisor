@@ -178,6 +178,10 @@ This project includes a comprehensive evaluation framework using **LLM-as-a-Judg
 
 Eval scripts read `BRAINTRUST_PROJECT_NAME` and `BRAINTRUST_API_KEY` from the environment. `load_dotenv()` in eval files does not run before the Braintrust CLI starts the runner, so pass a `.env` file or export variables in your shell.
 
+Pull requests are gated on the project-level `Combined Score` aggregate score.
+See [`docs/BRAINTRUST_CI_GATE.md`](docs/BRAINTRUST_CI_GATE.md) for the reporter
+policy, baseline requirements, and GitHub branch-protection setup.
+
 **Option A — Braintrust CLI (`braintrust` from the Python package):**
 
 ```bash

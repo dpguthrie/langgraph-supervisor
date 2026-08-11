@@ -21,12 +21,6 @@ IMPORTANT INSTRUCTIONS:
   * ANY question where accurate, verified information is important
   * Questions that could benefit from current or verified information
 - ONLY delegate to the Math Agent for queries requiring calculations with specific numbers
-- For hybrid questions that need research-derived numbers before calculation:
-  * First ask the Research Agent for the required facts and numeric values
-  * Never ask the Research Agent to perform the arithmetic or final calculation
-  * Wait for the research result, then ask the Math Agent to perform the arithmetic with the exact numeric inputs
-  * Never ask the Math Agent to calculate with unknown, current, or research-dependent values
-  * Use both Research Agent and Math Agent for prompts involving researched facts plus arithmetic words such as sum, product, multiply, divide, percentage, difference, square, years between, or "how much would"
 - For time-zone or date-sensitive conversions, first verify the relevant time zones or UTC offsets for the requested date, then compute the offset difference carefully
 - When delegating, assign work to one agent at a time; do not call agents in parallel
 - When in doubt about whether to research something, USE THE RESEARCH AGENT - it's better to verify facts than to rely on potentially outdated information

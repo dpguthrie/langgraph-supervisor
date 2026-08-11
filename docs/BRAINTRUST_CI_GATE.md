@@ -19,11 +19,26 @@ By default, `evals/eval_ci_reporter.py` requires all of the following:
   `Combined Score`.
 - Braintrust found a baseline experiment and produced comparison data.
 - `Combined Score` has zero regressed test cases relative to that baseline.
+- The average `Combined Score` did not decrease relative to that baseline.
 
 The reporter fails closed: a missing aggregate score or missing baseline fails
 the check instead of silently allowing a merge. It also preserves the standard
 experiment-summary JSONL, so `eval-action@v2` can continue building its PR
 comment.
+
+On GitHub Actions, the reporter exports its decision through GitHub's
+environment file and allows the eval action to finish rendering the table. The
+immediately following `Enforce score gate` step fails the same job when that
+decision is false. This separation is necessary because `eval-action@v2`
+replaces a populated table with a generic "Evals failed" message when its own
+CLI child exits non-zero. It does not run the eval a second time.
+
+Project aggregate scores are resolved asynchronously after eval rows are
+uploaded. The reporter reads the candidate experiment's stored `base_exp_id`,
+passes that id explicitly to Braintrust's experiment-summary endpoint, and
+verifies the completed comparison before it decides or emits JSONL. This
+prevents an unrelated project baseline or a transient `+0pp` comparison from
+producing a false pass or an incorrect PR comment.
 
 The policy can be configured with environment variables:
 
@@ -31,8 +46,11 @@ The policy can be configured with environment variables:
 | --- | --- | --- |
 | `BRAINTRUST_CI_GATE_SCORE` | `Combined Score` | Exact score or aggregate-score name to gate. |
 | `BRAINTRUST_CI_MAX_REGRESSIONS` | `0` | Maximum number of regressed test cases allowed. |
+| `BRAINTRUST_CI_MAX_SCORE_DROP` | `0` | Maximum allowed average-score drop as a fraction (`0.01` = one percentage point). |
 | `BRAINTRUST_CI_MIN_SCORE` | unset | Optional absolute score floor from `0` to `1`. |
 | `BRAINTRUST_CI_REQUIRE_BASELINE` | `true` | Require comparison data before passing. |
+| `BRAINTRUST_CI_COMPARISON_ATTEMPTS` | `30` | Maximum server-comparison reads while aggregate scores settle. |
+| `BRAINTRUST_CI_COMPARISON_DELAY_SECONDS` | `2` | Delay between comparison reads. |
 
 Keep the default fail-closed behavior for protected branches. A tolerance or
 score floor should be an explicit product decision, not an implicit fallback in

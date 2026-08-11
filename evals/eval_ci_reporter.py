@@ -24,6 +24,9 @@ MIN_SCORE_ENV = "BRAINTRUST_CI_MIN_SCORE"
 REQUIRE_BASELINE_ENV = "BRAINTRUST_CI_REQUIRE_BASELINE"
 COMPARISON_ATTEMPTS_ENV = "BRAINTRUST_CI_COMPARISON_ATTEMPTS"
 COMPARISON_DELAY_ENV = "BRAINTRUST_CI_COMPARISON_DELAY_SECONDS"
+GITHUB_ACTIONS_ENV = "GITHUB_ACTIONS"
+GITHUB_ENV_FILE_ENV = "GITHUB_ENV"
+GITHUB_GATE_RESULT_ENV = "BRAINTRUST_CI_GATE_PASSED"
 
 DEFAULT_COMPARISON_ATTEMPTS = 30
 DEFAULT_COMPARISON_DELAY_SECONDS = 2.0
@@ -433,6 +436,18 @@ def report_run(results: list[EvalGateReport], verbose: bool, jsonl: bool) -> boo
         print(f"Braintrust CI gate failed for {config.score_name!r}:", file=sys.stderr)
         for failure in decision.failures:
             print(f"- {failure}", file=sys.stderr)
+
+    github_env_file = os.getenv(GITHUB_ENV_FILE_ENV)
+    if os.getenv(GITHUB_ACTIONS_ENV) == "true" and github_env_file:
+        # eval-action@v2 replaces its populated PR report with a generic error
+        # whenever the CLI exits non-zero. Export the decision for the next
+        # workflow step and let this action finish successfully so the report
+        # remains visible. The following step still fails the same job/check.
+        with open(github_env_file, "a", encoding="utf-8") as env_file:
+            env_file.write(
+                f"{GITHUB_GATE_RESULT_ENV}={'true' if decision.passed else 'false'}\n"
+            )
+        return True
 
     return decision.passed
 

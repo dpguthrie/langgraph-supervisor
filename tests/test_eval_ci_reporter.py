@@ -8,6 +8,7 @@ from evals.eval_ci_reporter import (
     GateConfig,
     evaluate_gate,
     report_eval,
+    report_run,
     resolve_comparison_summary,
 )
 
@@ -276,3 +277,34 @@ def test_report_eval_does_not_emit_stale_summary_when_resolution_fails(
     assert report.errors == (
         "Braintrust comparison resolution failed: comparison unavailable",
     )
+
+
+def test_report_run_exports_github_gate_without_failing_eval_action(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    github_env = tmp_path / "github-env"
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_ENV", str(github_env))
+
+    action_result = report_run(
+        [make_report(diff=-0.01, regressions=1)],
+        verbose=False,
+        jsonl=True,
+    )
+
+    assert action_result is True
+    assert github_env.read_text() == "BRAINTRUST_CI_GATE_PASSED=false\n"
+
+
+def test_report_run_keeps_nonzero_local_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("GITHUB_ENV", raising=False)
+
+    local_result = report_run(
+        [make_report(diff=-0.01, regressions=1)],
+        verbose=False,
+        jsonl=True,
+    )
+
+    assert local_result is False

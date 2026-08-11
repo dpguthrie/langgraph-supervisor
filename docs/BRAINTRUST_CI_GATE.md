@@ -26,6 +26,13 @@ the check instead of silently allowing a merge. It also preserves the standard
 experiment-summary JSONL, so `eval-action@v2` can continue building its PR
 comment.
 
+On GitHub Actions, the reporter exports its decision through GitHub's
+environment file and allows the eval action to finish rendering the table. The
+immediately following `Enforce score gate` step fails the same job when that
+decision is false. This separation is necessary because `eval-action@v2`
+replaces a populated table with a generic "Evals failed" message when its own
+CLI child exits non-zero. It does not run the eval a second time.
+
 Project aggregate scores are resolved asynchronously after eval rows are
 uploaded. The reporter reads the candidate experiment's stored `base_exp_id`,
 passes that id explicitly to Braintrust's experiment-summary endpoint, and

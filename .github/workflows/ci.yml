@@ -42,7 +42,7 @@ jobs:
         run: |
           uv sync
 
-      - name: Run evals and enforce score gate
+      - name: Run evals and publish report
         uses: braintrustdata/eval-action@v2
         env:
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
@@ -60,3 +60,12 @@ jobs:
           paths: >-
             eval_supervisor.py
             eval_ci_reporter.py
+
+      - name: Enforce score gate
+        if: always()
+        shell: bash
+        run: |
+          if [[ "${BRAINTRUST_CI_GATE_PASSED:-}" != "true" ]]; then
+            echo "::error::Braintrust score gate failed. See the PR report and eval logs."
+            exit 1
+          fi

@@ -51,6 +51,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           BRAINTRUST_CI_GATE_SCORE: Combined Score
           BRAINTRUST_CI_MAX_REGRESSIONS: "0"
+          BRAINTRUST_CI_MAX_SCORE_DROP: "0"
         with:
           api_key: ${{ secrets.BRAINTRUST_API_KEY }}
           runtime: python

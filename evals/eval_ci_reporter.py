@@ -14,7 +14,7 @@ import traceback
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Iterable
 
-from braintrust import MetricSummary, Reporter, ScoreSummary, api_conn, init
+from braintrust import MetricSummary, Reporter, ScoreSummary, api_conn, login
 
 DEFAULT_GATE_SCORE = "Combined Score"
 GATE_SCORE_ENV = "BRAINTRUST_CI_GATE_SCORE"
@@ -134,28 +134,24 @@ def _parse_bool(name: str, *, default: bool) -> bool:
     raise ValueError(f"{name} must be true or false, got {raw_value!r}")
 
 
-def _fetch_comparison(experiment_id: str, baseline_id: str) -> dict[str, Any]:
-    """Fetch the same server-side comparison used by Experiment.summarize()."""
+def _fetch_experiment_metadata(experiment_id: str) -> dict[str, Any]:
+    """Fetch immutable experiment metadata, including its stored base id."""
 
+    login()
+    return api_conn().get_json(f"v1/experiment/{experiment_id}")
+
+
+def _fetch_experiment_summary(experiment_id: str, baseline_id: str) -> dict[str, Any]:
+    """Fetch a server summary against an explicit baseline experiment id."""
+
+    login()
     return api_conn().get_json(
-        "experiment-comparison2",
+        f"v1/experiment/{experiment_id}/summarize",
         args={
-            "experiment_id": experiment_id,
-            "base_experiment_id": baseline_id,
+            "summarize_scores": "true",
+            "comparison_experiment_id": baseline_id,
         },
     )
-
-
-def _resolve_experiment_id(project_name: str, experiment_name: str) -> str:
-    """Resolve an existing experiment without registering or updating it."""
-
-    experiment = init(
-        project=project_name,
-        experiment=experiment_name,
-        open=True,
-        set_current=False,
-    )
-    return experiment.id
 
 
 def _comparison_is_settled(candidate: dict[str, Any], baseline: dict[str, Any]) -> bool:
@@ -201,15 +197,24 @@ def _summary_from_comparison(summary: Any, payload: dict[str, Any]) -> Any:
         name: MetricSummary(_longest_metric_name=longest_metric_name, **item)
         for name, item in metric_items.items()
     }
-    return replace(summary, scores=scores, metrics=metrics)
+    return replace(
+        summary,
+        comparison_experiment_name=payload.get("comparison_experiment_name"),
+        scores=scores,
+        metrics=metrics,
+    )
 
 
 def resolve_comparison_summary(
     summary: Any,
     score_name: str,
     *,
-    fetch_comparison: Callable[[str, str], dict[str, Any]] = _fetch_comparison,
-    resolve_experiment_id: Callable[[str, str], str] = _resolve_experiment_id,
+    fetch_experiment_metadata: Callable[
+        [str], dict[str, Any]
+    ] = _fetch_experiment_metadata,
+    fetch_experiment_summary: Callable[
+        [str, str], dict[str, Any]
+    ] = _fetch_experiment_summary,
     attempts: int | None = None,
     delay_seconds: float | None = None,
     sleep: Callable[[float], None] = time.sleep,
@@ -217,9 +222,7 @@ def resolve_comparison_summary(
     """Wait for project aggregate-score comparison data to become consistent."""
 
     experiment_id = getattr(summary, "experiment_id", None)
-    project_name = getattr(summary, "project_name", None)
-    baseline_name = getattr(summary, "comparison_experiment_name", None)
-    if not experiment_id or not project_name or not baseline_name:
+    if not experiment_id:
         return summary
 
     attempts = attempts or _parse_positive_int(
@@ -233,12 +236,18 @@ def resolve_comparison_summary(
         else delay_seconds
     )
 
-    baseline_id = resolve_experiment_id(project_name, baseline_name)
-    baseline_payload = fetch_comparison(baseline_id, baseline_id)
+    experiment_metadata = fetch_experiment_metadata(experiment_id)
+    baseline_id = experiment_metadata.get("base_exp_id")
+    if not baseline_id:
+        raise RuntimeError(
+            f"experiment {experiment_id!r} does not have a stored base experiment"
+        )
+
+    baseline_payload = fetch_experiment_summary(baseline_id, baseline_id)
     baseline_score = baseline_payload.get("scores", {}).get(score_name)
     if baseline_score is None:
         raise RuntimeError(
-            f"baseline {baseline_name!r} does not contain score {score_name!r}"
+            f"baseline {baseline_id!r} does not contain score {score_name!r}"
         )
 
     last_score: dict[str, Any] | None = None
@@ -246,7 +255,7 @@ def resolve_comparison_summary(
         if attempt > 0 and delay_seconds:
             sleep(delay_seconds)
 
-        payload = fetch_comparison(experiment_id, baseline_id)
+        payload = fetch_experiment_summary(experiment_id, baseline_id)
         last_score = payload.get("scores", {}).get(score_name)
         if last_score is not None and _comparison_is_settled(
             last_score, baseline_score
@@ -368,12 +377,14 @@ def report_eval(
     )
 
     summary = result.summary
+    comparison_resolved = True
     try:
         summary = resolve_comparison_summary(
             summary,
             GateConfig.from_env().score_name,
         )
     except Exception as exc:
+        comparison_resolved = False
         errors += (f"Braintrust comparison resolution failed: {exc}",)
 
     if errors:
@@ -388,8 +399,11 @@ def report_eval(
             for error in errors:
                 print(error, file=sys.stderr)
 
-    # eval-action@v2 reads this JSONL to build and update its PR comment.
-    print(json.dumps(summary.as_dict()) if jsonl else summary)
+    # eval-action@v2 reads this JSONL to build and update its PR comment. Never
+    # emit the original summary when comparison resolution failed: it can carry
+    # the transient +0pp values that this reporter is designed to reject.
+    if comparison_resolved:
+        print(json.dumps(summary.as_dict()) if jsonl else summary)
     return EvalGateReport(summary=summary, errors=errors)
 
 

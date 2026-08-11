@@ -161,8 +161,10 @@ def _comparison_payload(
     diff: float,
     improvements: int,
     regressions: int,
+    comparison: str = "main-baseline",
 ) -> dict:
     return {
+        "comparison_experiment_name": comparison,
         "scores": {
             "Combined Score": {
                 "name": "Combined Score",
@@ -197,7 +199,7 @@ def test_resolver_replaces_transient_zero_comparison() -> None:
     )
     candidate_payloads = iter((transient, resolved))
 
-    def fetch(experiment_id: str, baseline_id: str) -> dict:
+    def fetch_summary(experiment_id: str, baseline_id: str) -> dict:
         assert baseline_id == "baseline-id"
         if experiment_id == "baseline-id":
             return baseline
@@ -207,8 +209,8 @@ def test_resolver_replaces_transient_zero_comparison() -> None:
     summary = resolve_comparison_summary(
         _experiment_summary(),
         "Combined Score",
-        fetch_comparison=fetch,
-        resolve_experiment_id=lambda project, name: "baseline-id",
+        fetch_experiment_metadata=lambda experiment_id: {"base_exp_id": "baseline-id"},
+        fetch_experiment_summary=fetch_summary,
         attempts=2,
         delay_seconds=0,
     )
@@ -217,6 +219,7 @@ def test_resolver_replaces_transient_zero_comparison() -> None:
     assert combined.diff == pytest.approx(-0.02296511627906994)
     assert combined.improvements == 14
     assert combined.regressions == 14
+    assert summary.comparison_experiment_name == "main-baseline"
 
 
 def test_resolver_fails_closed_if_comparison_never_settles() -> None:
@@ -233,15 +236,43 @@ def test_resolver_fails_closed_if_comparison_never_settles() -> None:
         regressions=0,
     )
 
-    def fetch(experiment_id: str, baseline_id: str) -> dict:
+    def fetch_summary(experiment_id: str, baseline_id: str) -> dict:
         return baseline if experiment_id == baseline_id else transient
 
     with pytest.raises(RuntimeError, match="did not settle"):
         resolve_comparison_summary(
             _experiment_summary(),
             "Combined Score",
-            fetch_comparison=fetch,
-            resolve_experiment_id=lambda project, name: "baseline-id",
+            fetch_experiment_metadata=lambda experiment_id: {
+                "base_exp_id": "baseline-id"
+            },
+            fetch_experiment_summary=fetch_summary,
             attempts=1,
             delay_seconds=0,
         )
+
+
+def test_report_eval_does_not_emit_stale_summary_when_resolution_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    summary = _experiment_summary()
+    result = SimpleNamespace(summary=summary, results=[])
+    evaluator = SimpleNamespace(eval_name="supervisor")
+
+    def fail_resolution(summary, score_name):
+        raise RuntimeError("comparison unavailable")
+
+    monkeypatch.setattr(
+        "evals.eval_ci_reporter.resolve_comparison_summary",
+        fail_resolution,
+    )
+
+    report = report_eval(evaluator, result, verbose=False, jsonl=True)
+
+    output_lines = capsys.readouterr().out.splitlines()
+    assert len(output_lines) == 1
+    assert "Braintrust comparison resolution failed" in output_lines[0]
+    assert report.errors == (
+        "Braintrust comparison resolution failed: comparison unavailable",
+    )

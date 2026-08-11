@@ -27,10 +27,11 @@ experiment-summary JSONL, so `eval-action@v2` can continue building its PR
 comment.
 
 Project aggregate scores are resolved asynchronously after eval rows are
-uploaded. The reporter re-reads Braintrust's completed comparison and verifies
-it against the baseline score before it decides or emits JSONL. This prevents a
-transient `+0pp` comparison from producing a false pass or an incorrect PR
-comment.
+uploaded. The reporter reads the candidate experiment's stored `base_exp_id`,
+passes that id explicitly to Braintrust's experiment-summary endpoint, and
+verifies the completed comparison before it decides or emits JSONL. This
+prevents an unrelated project baseline or a transient `+0pp` comparison from
+producing a false pass or an incorrect PR comment.
 
 The policy can be configured with environment variables:
 

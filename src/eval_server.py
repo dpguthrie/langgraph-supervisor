@@ -46,6 +46,7 @@ def braintrust_eval_server():
     from braintrust.devserver.server import create_app
 
     import evals
+    from src.bt_stop import stop_aware
 
     # Find all eval files in the evals directory
     # In Modal, the evals package is mounted and importable
@@ -73,6 +74,13 @@ def braintrust_eval_server():
     # Use Braintrust's built-in create_app which handles all the setup
     # This creates a Starlette ASGI app with routes, middleware, etc.
     app = create_app(evaluators, org_name=None)
+
+    # The Playground's Stop button does not reach a remote eval server -- a
+    # known Braintrust gap, still unfixed. stop_aware() closes it locally:
+    # it trips a per-run stop event on client disconnect and adds GET /runs +
+    # POST /stop as an out-of-band kill switch. Tasks opt in via @stoppable /
+    # cancellable() from src.bt_stop.
+    app = stop_aware(app)
 
     # Modal's ASGI runtime delivers scope["headers"] as bytearray pairs, but
     # Braintrust's CORS middleware does dict(scope["headers"]) which requires

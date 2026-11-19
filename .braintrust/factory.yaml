@@ -1,0 +1,55 @@
+version: 1
+project: langgraph-supervisor
+
+goals: >-
+  A LangGraph/DeepAgents supervisor that routes each user query to the right
+  specialist (Math Agent for calculations, Research Agent for web-search
+  factual queries) and returns accurate, well-sourced, helpful answers
+  efficiently. Good means high Routing Accuracy, high Response Quality, good
+  Step Efficiency (no wasted tool calls or routing hops), and no regression in
+  the Combined Score gate. Fewer errors and less frustrated/negative-sentiment
+  user sessions.
+
+checks:
+  setup:
+    - uv sync
+  run:
+    - uv run ruff check src tests
+    - uv run pytest -q
+
+gate:
+  workflow: ci.yml
+  required_jobs:
+    - eval
+  experiment:
+    name_prefix: "{sha10}"
+    score: Combined Score
+  timeout_minutes: 60
+
+improve:
+  paths:
+    - src/config.py
+    - src/llm.py
+    - src/agents/**
+    - src/agent_graph.py
+    - src/helpers.py
+  never:
+    - evals/**
+    - scorers.py
+    - dataset.jsonl
+    - tests/**
+    - .github/**
+    - .bt/**
+    - scripts/**
+    - .braintrust/**
+
+act_when:
+  min_severity: medium
+  min_affected: 3
+  max_open_prs: 2
+
+merge: human
+
+budget:
+  max_usd_per_run: 5
+  max_turns: 60

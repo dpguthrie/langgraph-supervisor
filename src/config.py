@@ -35,6 +35,8 @@ IMPORTANT INSTRUCTIONS:
   * When you do calculate, state the period, metric and source of each input in the final answer and do not report false precision
 - For sports or current-event requests with relative dates ("latest", "this year", "last week", "last two"), convert them to concrete dates/seasons using the current date before delegating, and ask the Research Agent to verify event date, season and competition phase from authoritative (non-social-media) sources
 - For time-zone or date-sensitive conversions, first verify the relevant time zones or UTC offsets for the requested date, then compute the offset difference carefully
+  * The Research Agent has a deterministic IANA timezone tool; ask it for each zone's UTC offset and DST status on the anchor date rather than relying on web snippets. If offsets from different results disagree, do not synthesize: re-ask once for the tool values
+  * The final answer must state the anchor date, source and target zones, their UTC offsets on that date, and DST status
 - When delegating, assign work to one agent at a time; do not call agents in parallel
 - Batch related factual lookups (e.g. comparing several people, places, companies, or statistics) into ONE Research Agent task that lists every item to look up; do not start a separate Research Agent session per entity
 - Do not send the Research Agent overlapping or duplicate objectives; merge them into a single task before delegating
@@ -77,6 +79,7 @@ DEFAULT_RESEARCH_AGENT_PROMPT = (
     "- Do not ask the user to provide values that can be looked up\n"
     f"- The current date is {datetime.now().strftime('%Y-%m-%d')}. Resolve relative dates (latest, this year, last week, last two, current season) against it, and put the concrete year/season in your search queries\n"
     "- For sports standings, results, schedules and medal tables, confirm the event's date, season and competition phase (e.g. group stage vs. knockout) from the source before reporting; prefer official or established sports/news sites over social media posts; if the newest data found is from an earlier season, say so and search once more for the current one\n"
+    "- For time zones, UTC offsets, DST status or current local time, use get_timezone_info (IANA zone names, anchor date YYYY-MM-DD) instead of web search; never trust web snippets for offsets or DST dates. Report anchor date, zones, UTC offsets and DST status for each zone\n"
     "- If search results disagree, say which sourced value you selected and keep the answer concise\n"
     "- After you're done with your tasks, respond to the supervisor directly\n"
     "- Respond ONLY with the results of your work, do NOT include ANY other text."

@@ -1,6 +1,9 @@
 """Research agent with web search capabilities."""
 
+import json
 from datetime import datetime
+from urllib.parse import urlencode
+from urllib.request import urlopen
 from zoneinfo import ZoneInfo
 
 from langchain.agents import create_agent
@@ -38,6 +41,76 @@ def get_timezone_info(timezone: str, date: str = "") -> str:
     )
 
 
+@tool
+def get_historical_rainfall(city: str, start_year: int, end_year: int) -> str:
+    """Official-style historical rainfall lookup via Open-Meteo (no web scraping).
+
+    Args:
+        city: City name, e.g. "Seattle" or "London, GB".
+        start_year: First calendar year (inclusive).
+        end_year: Last calendar year (inclusive); must be a completed or current year.
+
+    Returns resolved location/coordinates, date range, and total precipitation per
+    year in millimeters (mm) plus the inches equivalent, so places compare directly.
+    """
+    try:
+        name, _, country = (p.strip() for p in (city + ",").split(",", 2))
+        geo_url = "https://geocoding-api.open-meteo.com/v1/search?" + urlencode(
+            {"name": name, "count": 5, "language": "en"}
+        )
+        with urlopen(geo_url, timeout=20) as resp:
+            results = json.load(resp).get("results") or []
+        country = country.strip(", ").upper()
+        if country:
+            results = [
+                r for r in results if r.get("country_code", "").upper() == country
+            ] or results
+        if not results:
+            return f"Error: could not geocode '{city}'."
+        place = results[0]
+        today = datetime.now(ZoneInfo("UTC")).date()
+        if start_year > end_year or start_year > today.year:
+            return (
+                f"Error: invalid year range {start_year}-{end_year} "
+                f"(current year is {today.year})."
+            )
+        end = min(datetime(end_year, 12, 31).date(), today)
+        start = datetime(start_year, 1, 1).date()
+        url = "https://archive-api.open-meteo.com/v1/archive?" + urlencode(
+            {
+                "latitude": place["latitude"],
+                "longitude": place["longitude"],
+                "start_date": start.isoformat(),
+                "end_date": end.isoformat(),
+                "daily": "precipitation_sum",
+                "timezone": "UTC",
+            }
+        )
+        with urlopen(url, timeout=30) as resp:
+            daily = json.load(resp)["daily"]
+    except Exception as e:
+        return f"Error: {e}. Check city name and years."
+    totals: dict[str, float] = {}
+    days: dict[str, int] = {}
+    for day, value in zip(daily["time"], daily["precipitation_sum"], strict=False):
+        if value is not None:
+            totals[day[:4]] = totals.get(day[:4], 0.0) + value
+            days[day[:4]] = days.get(day[:4], 0) + 1
+    lines = []
+    for y, mm in sorted(totals.items()):
+        year = int(y)
+        leap = year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+        note = "" if days[y] == (366 if leap else 365) else f" PARTIAL: {days[y]} days"
+        lines.append(f"{y}: {mm:.1f} mm ({mm / 25.4:.2f} in){note}")
+    return (
+        f"location={place['name']}, {place.get('country_code', '')} "
+        f"(lat={place['latitude']}, lon={place['longitude']}); "
+        f"range={start.isoformat()}..{end.isoformat()}; source=Open-Meteo archive; "
+        "metric=daily precipitation_sum totals, units mm (inches given too)\n"
+        + "\n".join(lines)
+    )
+
+
 def get_research_agent(
     system_prompt: str | None = None, model: str = DEFAULT_RESEARCH_MODEL
 ):
@@ -62,7 +135,7 @@ def get_research_agent(
 
     return create_agent(
         model=get_gateway_chat_model(model),
-        tools=[web_search, get_timezone_info],
+        tools=[web_search, get_timezone_info, get_historical_rainfall],
         system_prompt=prompt,
         name="ResearchAgent",
     )

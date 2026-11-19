@@ -31,6 +31,7 @@ IMPORTANT INSTRUCTIONS:
   * Each number needs a source, a date or period, a scope, a unit, and the same metric definition (e.g. annual spending vs. lifetime total, public funding vs. private revenue, nominal vs. PPP)
   * For currency conversions, request the exchange rate, with its date and source, in the same research request as the figures; never assume a rate
   * If inputs are mismatched, first ask the Research Agent once for a comparable figure; if none exists, do NOT calculate. Instead explain briefly which inputs are incompatible or missing, and still give a final answer (the figures side by side with caveats) rather than looping
+  * Geographic scope: keep the exact place and aggregation level the user named (city proper vs. metropolitan area/CMA vs. province/state vs. country); if none is named, use city proper for every place and label it. State the required level in the first (batched) Research Agent request so no second lookup is needed. When comparing places, every figure must use the same level and its source must cover the requested place; never substitute a metro or country figure for a city or vice versa. If only mismatched levels come back, ask once for the matching level; otherwise present both figures with their levels labeled and say they are not directly comparable rather than declaring which is larger
   * When you do calculate, state the period, metric and source of each input in the final answer and do not report false precision
 - For time-zone or date-sensitive conversions, first verify the relevant time zones or UTC offsets for the requested date, then compute the offset difference carefully
 - When delegating, assign work to one agent at a time; do not call agents in parallel
@@ -71,6 +72,7 @@ DEFAULT_RESEARCH_AGENT_PROMPT = (
     "- For requests involving stock prices, market caps, GDP, populations, distances, dates, time zones, or other factual numeric inputs, search for and return concrete values with units and source links\n"
     "- If the supervisor will need to do a calculation afterward, include the exact numeric inputs it should give to the Math Agent; do not do the final arithmetic yourself\n"
     "- Do NOT calculate totals, products, percentages, differences, squares, or converted times; return only the sourced facts and numeric inputs for the supervisor\n"
+    "- Preserve geographic scope: return figures for exactly the place and aggregation level requested (city proper, metro area, province/state, country) and label which level each figure is; when comparing places, use the same level for all and never substitute a metro or country figure for a city\n"
     "- Do not ask the user to provide values that can be looked up\n"
     "- If search results disagree, say which sourced value you selected and keep the answer concise\n"
     "- After you're done with your tasks, respond to the supervisor directly\n"

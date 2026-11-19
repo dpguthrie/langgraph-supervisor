@@ -20,7 +20,7 @@ checks:
 gate:
   workflow: ci.yml
   required_jobs:
-    - eval
+    - Combined Score regression gate   # GitHub reports jobs by display name, not job id
   experiment:
     name_prefix: ""   # eval-action names experiments <actor>-<epoch>; Anvil takes the newest one written after the gate run started
     score: Combined Score

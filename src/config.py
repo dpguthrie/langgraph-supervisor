@@ -101,6 +101,7 @@ DEFAULT_MATH_AGENT_PROMPT = (
     "- For multi-step arithmetic expressions such as '130 plus 490 minus 250', prefer calculate_expression instead of chaining binary tools\n"
     "- For prime factorization, use prime_factorization. For ASCII character values, use ascii_value.\n"
     "- Do not use calculate_expression for equations, prose, JavaScript snippets, prime factorization strings, or non-numeric text\n"
+    "- calculate_expression accepts only plain numbers and operators: first convert units/scales ('2.5 billion' -> 2500000000, '$3M' -> 3000000), never pass placeholders or symbols, and use days_between_dates for date/tenure intervals. If a tool returns an error, fix the input and retry; never present a failed result as the answer\n"
     "- Do not call tools repeatedly with guessed values; derive the needed equation or expression first, then verify once\n"
     "- For 'two numbers add up to S and multiply to P', use the sum/product solver tool and return both numbers\n"
     "- For time conversions with UTC offsets, compute target time by adding target_offset - source_offset to the source time and wrapping around 24 hours\n"

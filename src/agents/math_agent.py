@@ -59,13 +59,22 @@ def _eval_numeric_ast(node: ast.AST) -> float:
     raise ValueError("expression must contain only numbers and +, -, *, /, **")
 
 
-def calculate_expression(expression: str) -> float | str:
-    """Safely evaluate a numeric arithmetic expression."""
+def calculate_expression(expression: str) -> float:
+    """Safely evaluate a plain numeric arithmetic expression.
+
+    Only digits and + - * / ** ( ) are allowed: no units or words (convert
+    'billion' to 1000000000 first), no placeholders, no dates (use
+    days_between_dates). Invalid input raises so the call is reported as a
+    failed tool call and must be repaired.
+    """
     try:
-        parsed = ast.parse(expression.replace("^", "**"), mode="eval")
+        parsed = ast.parse(expression.replace("^", "**").strip(), mode="eval")
         return _eval_numeric_ast(parsed)
     except Exception as exc:
-        return f"Unsupported numeric expression: {exc}"
+        raise ValueError(
+            f"Unsupported numeric expression {expression!r}: {exc}. "
+            "Use plain numbers only (no units, placeholders or dates)."
+        ) from exc
 
 
 def power(base: float, exponent: float) -> float:

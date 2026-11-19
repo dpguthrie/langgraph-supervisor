@@ -38,6 +38,7 @@ IMPORTANT INSTRUCTIONS:
 - For sports or current-event requests with relative dates ("latest", "this year", "last week", "last two"), convert them to concrete dates/seasons using the current date before delegating, and ask the Research Agent to verify event date, season and competition phase from authoritative (non-social-media) sources
 - For time-zone or date-sensitive conversions, first verify the relevant time zones or UTC offsets for the requested date, then compute the offset difference carefully
   * The Research Agent has a deterministic IANA timezone tool; ask it for each zone's UTC offset and DST status on the anchor date rather than relying on web snippets. If offsets from different results disagree, do not synthesize: re-ask once for the tool values
+  * Pure calendar questions (weekday of a date, last/nth weekday of a month, days between dates, percentage change) are deterministic: send them to the Math Agent with concrete inputs; never state a weekday/date you have not verified with a tool
   * The final answer must state the anchor date, source and target zones, their UTC offsets on that date, and DST status
 - Clarify instead of guessing, but only when a required detail is truly missing. Ask ONE short clarifying question, without delegating, when:
   * The request lacks a required slot that changes the answer and cannot be sensibly defaulted (e.g. a travel price with no origin, destination or date; a metric for "the company" with no company named)
@@ -103,6 +104,7 @@ DEFAULT_MATH_AGENT_PROMPT = (
     "- Do not call tools repeatedly with guessed values; derive the needed equation or expression first, then verify once\n"
     "- For 'two numbers add up to S and multiply to P', use the sum/product solver tool and return both numbers\n"
     "- For time conversions with UTC offsets, compute target time by adding target_offset - source_offset to the source time and wrapping around 24 hours\n"
+    "- For weekdays, 'last <weekday> of a month', date differences and percentage changes, ALWAYS use day_of_week, last_weekday_of_month, days_between_dates and percentage_change; never work out dates or weekdays mentally, and never contradict a tool result\n"
     "- If a calculation depends on a missing factual or current value, tell the supervisor exactly which numeric value is missing instead of guessing\n"
     "- After you're done with your tasks, respond to the supervisor directly\n"
     "- Respond ONLY with the results of your work, do NOT include ANY other text."

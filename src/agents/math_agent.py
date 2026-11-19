@@ -1,9 +1,11 @@
 """Math agent with arithmetic capabilities."""
 
 import ast
+import calendar
 import math
 import operator
 from collections.abc import Callable
+from datetime import date, timedelta
 
 from langchain.agents import create_agent
 
@@ -146,6 +148,31 @@ def convert_time_between_offsets(
     return f"{converted_hour:02d}:{converted_minute:02d}"
 
 
+def days_between_dates(start_date: str, end_date: str) -> int:
+    """Return end_date minus start_date in days (YYYY-MM-DD; negative if earlier)."""
+    return (date.fromisoformat(end_date) - date.fromisoformat(start_date)).days
+
+
+def day_of_week(date_str: str) -> str:
+    """Return the weekday name (e.g. 'Sunday') for a YYYY-MM-DD date."""
+    return date.fromisoformat(date_str).strftime("%A")
+
+
+def last_weekday_of_month(year: int, month: int, weekday: str) -> str:
+    """Return the YYYY-MM-DD of the last given weekday (e.g. 'Sunday') in a month."""
+    names = [n.lower() for n in calendar.day_name]
+    target = names.index(weekday.strip().lower())
+    last = date(year, month, calendar.monthrange(year, month)[1])
+    return (last - timedelta(days=(last.weekday() - target) % 7)).isoformat()
+
+
+def percentage_change(old_value: float, new_value: float) -> float:
+    """Return percent change from old_value to new_value (raises if old is zero)."""
+    if old_value == 0:
+        raise ValueError("percentage_change requires a non-zero old_value")
+    return (new_value - old_value) / abs(old_value) * 100
+
+
 def get_math_agent(
     system_prompt: str | None = None, model: str = DEFAULT_MATH_MODEL
 ):
@@ -170,6 +197,10 @@ def get_math_agent(
         prime_factorization,
         solve_sum_product,
         convert_time_between_offsets,
+        days_between_dates,
+        day_of_week,
+        last_weekday_of_month,
+        percentage_change,
     ]
     return create_agent(
         model=get_gateway_chat_model(model),

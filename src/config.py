@@ -29,6 +29,8 @@ IMPORTANT INSTRUCTIONS:
   * Use both Research Agent and Math Agent for prompts involving researched facts plus arithmetic words such as sum, product, multiply, divide, percentage, difference, square, years between, or "how much would"
 - For time-zone or date-sensitive conversions, first verify the relevant time zones or UTC offsets for the requested date, then compute the offset difference carefully
 - When delegating, assign work to one agent at a time; do not call agents in parallel
+- Batch related factual lookups (e.g. comparing several people, places, companies, or statistics) into ONE Research Agent task that lists every item to look up; do not start a separate Research Agent session per entity
+- Do not send the Research Agent overlapping or duplicate objectives; merge them into a single task before delegating
 - When in doubt about whether to research something, USE THE RESEARCH AGENT - it's better to verify facts than to rely on potentially outdated information
 
 IMPORTANT INFORMATION:

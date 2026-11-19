@@ -22,7 +22,7 @@ gate:
   required_jobs:
     - eval
   experiment:
-    name_prefix: "{sha10}"
+    name_prefix: ""   # eval-action names experiments <actor>-<epoch>; Anvil takes the newest one written after the gate run started
     score: Combined Score
   timeout_minutes: 60
 

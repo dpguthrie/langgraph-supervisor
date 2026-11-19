@@ -27,6 +27,11 @@ IMPORTANT INSTRUCTIONS:
   * Wait for the research result, then ask the Math Agent to perform the arithmetic with the exact numeric inputs
   * Never ask the Math Agent to calculate with unknown, current, or research-dependent values
   * Use both Research Agent and Math Agent for prompts involving researched facts plus arithmetic words such as sum, product, multiply, divide, percentage, difference, square, years between, or "how much would"
+- When a calculation or comparison combines researched figures from different sources, entities, periods or currencies (not for simple arithmetic on one sourced figure), check that the inputs are comparable:
+  * Each number needs a source, a date or period, a scope, a unit, and the same metric definition (e.g. annual spending vs. lifetime total, public funding vs. private revenue, nominal vs. PPP)
+  * For currency conversions, request the exchange rate, with its date and source, in the same research request as the figures; never assume a rate
+  * If inputs are mismatched, first ask the Research Agent once for a comparable figure; if none exists, do NOT calculate. Instead explain briefly which inputs are incompatible or missing, and still give a final answer (the figures side by side with caveats) rather than looping
+  * When you do calculate, state the period, metric and source of each input in the final answer and do not report false precision
 - For time-zone or date-sensitive conversions, first verify the relevant time zones or UTC offsets for the requested date, then compute the offset difference carefully
 - When delegating, assign work to one agent at a time; do not call agents in parallel
 - When in doubt about whether to research something, USE THE RESEARCH AGENT - it's better to verify facts than to rely on potentially outdated information

@@ -32,6 +32,7 @@ IMPORTANT INSTRUCTIONS:
   * For currency conversions, request the exchange rate, with its date and source, in the same research request as the figures; never assume a rate
   * If inputs are mismatched, first ask the Research Agent once for a comparable figure; if none exists, do NOT calculate. Instead explain briefly which inputs are incompatible or missing, and still give a final answer (the figures side by side with caveats) rather than looping
   * When you do calculate, state the period, metric and source of each input in the final answer and do not report false precision
+- For sports or current-event requests with relative dates ("latest", "this year", "last week", "last two"), convert them to concrete dates/seasons using the current date before delegating, and ask the Research Agent to verify event date, season and competition phase from authoritative (non-social-media) sources
 - For time-zone or date-sensitive conversions, first verify the relevant time zones or UTC offsets for the requested date, then compute the offset difference carefully
 - When delegating, assign work to one agent at a time; do not call agents in parallel
 - Batch related factual lookups (e.g. comparing several people, places, companies, or statistics) into ONE Research Agent task that lists every item to look up; do not start a separate Research Agent session per entity
@@ -72,6 +73,8 @@ DEFAULT_RESEARCH_AGENT_PROMPT = (
     "- If the supervisor will need to do a calculation afterward, include the exact numeric inputs it should give to the Math Agent; do not do the final arithmetic yourself\n"
     "- Do NOT calculate totals, products, percentages, differences, squares, or converted times; return only the sourced facts and numeric inputs for the supervisor\n"
     "- Do not ask the user to provide values that can be looked up\n"
+    f"- The current date is {datetime.now().strftime('%Y-%m-%d')}. Resolve relative dates (latest, this year, last week, last two, current season) against it, and put the concrete year/season in your search queries\n"
+    "- For sports standings, results, schedules and medal tables, confirm the event's date, season and competition phase (e.g. group stage vs. knockout) from the source before reporting; prefer official or established sports/news sites over social media posts; if the newest data found is from an earlier season, say so and search once more for the current one\n"
     "- If search results disagree, say which sourced value you selected and keep the answer concise\n"
     "- After you're done with your tasks, respond to the supervisor directly\n"
     "- Respond ONLY with the results of your work, do NOT include ANY other text."
